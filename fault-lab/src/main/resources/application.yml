@@ -1,0 +1,60 @@
+spring:
+  application:
+    name: ${FAULTLAB_SERVICE_NAME:faultlab}
+  config:
+    import: optional:configtree:/run/secrets/
+  datasource:
+    url: ${FAULTLAB_DB_URL:jdbc:postgresql://localhost:5432/faultlab}
+    username: ${FAULTLAB_DB_USERNAME:faultlab}
+    password: ${FAULTLAB_DB_PASSWORD:${faultlab.db.password:}}
+    hikari:
+      maximum-pool-size: ${FAULTLAB_HIKARI_MAX:4}
+      minimum-idle: 0
+      connection-timeout: ${FAULTLAB_HIKARI_CONNECTION_TIMEOUT_MS:500}
+      validation-timeout: 500
+  flyway:
+    enabled: ${FAULTLAB_FLYWAY_ENABLED:false}
+    locations: classpath:db/migration
+    validate-migration-naming: true
+  lifecycle:
+    timeout-per-shutdown-phase: 20s
+
+server:
+  port: ${SERVER_PORT:8080}
+  shutdown: graceful
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: never
+  metrics:
+    tags:
+      application: ${spring.application.name}
+      environment: ${DEPLOYMENT_ENVIRONMENT:local}
+
+logging:
+  file:
+    name: ${FAULTLAB_LOG_FILE:}
+  logback:
+    rollingpolicy:
+      max-file-size: 20MB
+      max-history: 2
+      total-size-cap: 100MB
+  structured:
+    format:
+      console: logstash
+      file: logstash
+
+faultlab:
+  role: ${FAULTLAB_ROLE:order}
+  controls-enabled: ${FAULTLAB_CONTROLS_ENABLED:false}
+  control-token: ${FAULTLAB_CONTROL_TOKEN:${faultlab.control.token:}}
+  payment-url: ${FAULTLAB_PAYMENT_URL:http://payment-service:8080}
+  order-request-timeout-ms: ${FAULTLAB_ORDER_REQUEST_TIMEOUT_MS:1000}
+  downstream-delay-ms: ${FAULTLAB_DOWNSTREAM_DELAY_MS:3000}

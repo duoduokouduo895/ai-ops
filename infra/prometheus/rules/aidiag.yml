@@ -1,0 +1,70 @@
+groups:
+  - name: aidiag-platform
+    rules:
+      - alert: AIDiagBackendDown
+        expr: up{job="aidiag"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          service_name: aidiag
+        annotations:
+          summary: AIDiag backend is unavailable
+          description: Prometheus has failed to scrape AIDiag for more than one minute.
+
+      - alert: AIDiagHighJvmHeapUsage
+        expr: |
+          (
+            sum by (service_name) (jvm_memory_used_bytes{job="aidiag",area="heap"})
+            /
+            sum by (service_name) (jvm_memory_max_bytes{job="aidiag",area="heap"} > 0)
+          ) > 0.85
+        for: 5m
+        labels:
+          severity: warning
+          service_name: aidiag
+        annotations:
+          summary: AIDiag JVM heap usage is high
+          description: JVM heap usage has remained above 85 percent for five minutes.
+
+      - alert: FaultLabThreadPoolRejected
+        expr: faultlab_thread_pool_saturated{service_name="payment-service"} == 1
+        for: 15s
+        labels:
+          severity: warning
+          service_name: payment-service
+        annotations:
+          summary: Fault Lab payment worker pool is saturated
+          description: The controlled Fault Lab worker pool has two active workers and a full queue.
+
+      - alert: FaultLabHikariPoolExhausted
+        expr: faultlab_hikari_holders_active >= 4
+        for: 15s
+        labels:
+          severity: warning
+          service_name: payment-service
+        annotations:
+          summary: Fault Lab payment connection pool is exhausted
+          description: All four controlled Fault Lab Hikari connections are held.
+
+      # These two rules are deliberately limited to the isolated Fault Lab. The
+      # faultlab_fault_active metric represents a fixed, authenticated test control
+      # state; it must never be reused as a production service-health signal.
+      - alert: FaultLabDownstreamTimeout
+        expr: faultlab_fault_active{service_name="payment-service",fault="downstream-timeout"} == 1
+        for: 15s
+        labels:
+          severity: warning
+          service_name: payment-service
+        annotations:
+          summary: Fault Lab controlled downstream timeout is active
+          description: The controlled Payment downstream delay is active; trigger an Order request to collect its log and trace evidence.
+
+      - alert: FaultLabDatabaseSlowQuery
+        expr: faultlab_fault_active{service_name="payment-service",fault="database-slow-query"} == 1
+        for: 15s
+        labels:
+          severity: warning
+          service_name: payment-service
+        annotations:
+          summary: Fault Lab controlled database slow query is active
+          description: The controlled Payment database slow-query fault is active; trigger an Order request to collect its log and trace evidence.

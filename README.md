@@ -46,11 +46,11 @@ Stage 4 supplies a disabled-by-default, authenticated operator-triggered Spring 
 boundary. It persists advisory attempts separately, validates that model output
 references only supplied evidence and controlled runbook actions, and never
 performs remediation or changes the deterministic primary root cause. No model
-provider starter or model/operator secret is included yet. The reviewed target is the
-official DeepSeek API with `deepseek-v4-flash`; the first provider integration will use
-OpenAI compatibility, explicitly disable thinking mode, and retain local output validation.
-Mounting dedicated provider/operator credentials and passing real-provider contract tests
-remain explicit deployment gates.
+The reviewed provider adapter is the official DeepSeek API with `deepseek-v4-flash` through
+Spring AI's OpenAI-compatible starter. Every request disables thinking, requests JSON output,
+allows no automatic retry, caps output at 1,200 tokens, and remains subject to an atomic
+20-request UTC daily budget. Dedicated provider/operator credentials are mounted only by
+`compose.stage4.yaml`; passing real-provider contract tests remains a deployment gate.
 The provider-neutral Stage 4 foundation is deployed with `AIDIAG_STAGE4_ENABLED=false`;
 real-provider acceptance is intentionally still pending.
 

@@ -12,6 +12,8 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
+import org.mockito.ArgumentCaptor;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -104,6 +106,38 @@ class Stage4AiDiagnosisServiceTests {
         verify(model, never()).generate(any());
     }
 
+    @Test
+    void dailyBudgetStopsTheCallBeforeTheModelIsInvoked() {
+        var repository = repository();
+        when(repository.reserveDailyRequest(20)).thenReturn(false);
+        var model = modelReturning(new AiDiagnosisAdvice("summary", List.of("hypothesis"), List.of(), List.of(), List.of()));
+        service = service(repository, model, 2);
+
+        var result = service.preview(INCIDENT_ID);
+
+        assertThat(result.failureCode()).isEqualTo("DAILY_BUDGET_EXCEEDED");
+        verify(model, never()).generate(any());
+        verify(repository).completeAttempt(eq(ATTEMPT_ID), eq("FALLBACK"), any(), eq("DAILY_BUDGET_EXCEEDED"), any());
+    }
+
+    @Test
+    void redactsStandaloneCredentialsAndPersonalDataBeforeCallingTheModel() {
+        var repository = repository();
+        var fakeApiKey = "sk-" + "1234567890abcdefghijkl";
+        when(repository.evidence(RUN_ID, 12)).thenReturn(List.of(new Stage4Repository.EvidenceSnapshot(EVIDENCE_ID, "LOG",
+                "loki", fakeApiKey + " cookie=abc user@example.com 13800138000 https://user:pass@example.test/path")));
+        var model = modelReturning(new AiDiagnosisAdvice("summary", List.of("hypothesis"), List.of(), List.of(), List.of()));
+        service = service(repository, model, 2);
+
+        service.preview(INCIDENT_ID);
+
+        var prompt = ArgumentCaptor.forClass(AiDiagnosisPrompt.class);
+        verify(model).generate(prompt.capture());
+        assertThat(prompt.getValue().evidence().getFirst().summary())
+                .doesNotContain(fakeApiKey, "cookie=abc", "user@example.com", "13800138000", "user:pass")
+                .contains("[REDACTED_API_KEY]", "[REDACTED_EMAIL]", "[REDACTED_PHONE]");
+    }
+
     private static Stage4Repository repository() {
         var repository = mock(Stage4Repository.class);
         var reportJson = """
@@ -115,6 +149,7 @@ class Stage4AiDiagnosisServiceTests {
         when(repository.evidence(RUN_ID, 12)).thenReturn(List.of(
                 new Stage4Repository.EvidenceSnapshot(EVIDENCE_ID, "METRIC", "prometheus", "bounded evidence")));
         when(repository.startAttempt(eq(INCIDENT_ID), eq(REPORT_ID), eq("stage4-v1"), any(), any(), any())).thenReturn(ATTEMPT_ID);
+        when(repository.reserveDailyRequest(20)).thenReturn(true);
         return repository;
     }
 

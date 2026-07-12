@@ -1,0 +1,19 @@
+# Apply only after both Stage 4 secret files exist:
+# docker compose -f compose.yaml -f compose.stage4.yaml up -d --build aidiag-backend
+services:
+  aidiag-backend:
+    environment:
+      AIDIAG_STAGE4_CHAT_MODEL: openai
+      AIDIAG_DEEPSEEK_BASE_URL: https://api.deepseek.com
+      AIDIAG_DEEPSEEK_MODEL: deepseek-v4-flash
+    secrets:
+      - source: aidiag_deepseek_api_key
+        target: aidiag.deepseek.api-key
+      - source: aidiag_stage4_operator_secret
+        target: aidiag.stage4.operator.secret
+
+secrets:
+  aidiag_deepseek_api_key:
+    file: ${AIDIAG_SECRETS_DIR:-./.secrets}/aidiag_deepseek_api_key
+  aidiag_stage4_operator_secret:
+    file: ${AIDIAG_SECRETS_DIR:-./.secrets}/aidiag_stage4_operator_secret

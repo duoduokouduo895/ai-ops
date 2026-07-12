@@ -26,7 +26,12 @@ public class Stage4AiDiagnosisService {
 
     private static final Pattern BEARER_SECRET = Pattern.compile("(?i)\\bBearer\\s+[A-Za-z0-9._~+/-]+=*");
     private static final Pattern ASSIGNED_SECRET = Pattern.compile(
-            "(?i)\\b(password|passwd|token|api[_-]?key|secret|authorization)\\b\\s*[:=]\\s*[^\\s,;]+", Pattern.UNICODE_CASE);
+            "(?i)\\b(password|passwd|token|api[_-]?key|secret|authorization|cookie|session)\\b\\s*[:=]\\s*[^\\s,;]+",
+            Pattern.UNICODE_CASE);
+    private static final Pattern STANDALONE_API_KEY = Pattern.compile("(?i)\\bsk-[A-Za-z0-9_-]{16,}\\b");
+    private static final Pattern URI_USER_INFO = Pattern.compile("(?i)\\b(https?://)[^\\s/@:]+:[^\\s/@]+@");
+    private static final Pattern EMAIL = Pattern.compile("(?i)\\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,}\\b");
+    private static final Pattern CN_MOBILE = Pattern.compile("(?<![A-Za-z0-9])(?:\\+?86[- ]?)?1[3-9]\\d{9}(?!\\d)");
     private static final int MAX_RUNBOOK_ACTIONS = 5;
 
     private final Stage4Repository repository;
@@ -49,10 +54,17 @@ public class Stage4AiDiagnosisService {
         var snapshot = repository.latestReport(incidentId)
                 .orElseThrow(() -> new NoSuchElementException("No deterministic diagnosis report exists for incident " + incidentId));
         var prompt = prompt(incidentId, snapshot);
-        var attemptId = repository.startAttempt(incidentId, snapshot.reportId(), settings.promptVersion(), json(prompt),
+        var requestJson = json(prompt);
+        var attemptId = repository.startAttempt(incidentId, snapshot.reportId(), settings.promptVersion(), requestJson,
                 modelClient.provider(), modelClient.modelName());
         if (!settings.enabled()) {
             return fallback(attemptId, "STAGE4_DISABLED", "Stage 4 is disabled by configuration");
+        }
+        if (requestJson.length() > settings.maxPromptChars()) {
+            return fallback(attemptId, "PROMPT_BUDGET_EXCEEDED", "Sanitized model prompt exceeds the configured size limit");
+        }
+        if (!repository.reserveDailyRequest(settings.dailyRequestLimit())) {
+            return fallback(attemptId, "DAILY_BUDGET_EXCEEDED", "Daily model request limit has been reached");
         }
         try {
             var advice = generateWithinBudget(prompt);
@@ -151,6 +163,10 @@ public class Stage4AiDiagnosisService {
     private static String sanitizedEvidenceSummary(String value) {
         var sanitized = BEARER_SECRET.matcher(value == null ? "" : value).replaceAll("Bearer [REDACTED]");
         sanitized = ASSIGNED_SECRET.matcher(sanitized).replaceAll("$1=[REDACTED]");
+        sanitized = STANDALONE_API_KEY.matcher(sanitized).replaceAll("[REDACTED_API_KEY]");
+        sanitized = URI_USER_INFO.matcher(sanitized).replaceAll("$1[REDACTED]@");
+        sanitized = EMAIL.matcher(sanitized).replaceAll("[REDACTED_EMAIL]");
+        sanitized = CN_MOBILE.matcher(sanitized).replaceAll("[REDACTED_PHONE]");
         return bounded(sanitized, 600);
     }
 

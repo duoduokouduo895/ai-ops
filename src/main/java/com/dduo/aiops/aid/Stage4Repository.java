@@ -6,6 +6,7 @@ import java.util.UUID;
 
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Transactional;
 
 /** Reads the immutable deterministic report and records every Stage 4 outcome separately. */
 @Repository
@@ -51,6 +52,35 @@ public class Stage4Repository {
                 RETURNING id
                 """, (resultSet, rowNumber) -> resultSet.getObject(1, UUID.class), incidentId, sourceReportId, promptVersion,
                 provider, modelName, requestJson);
+    }
+
+    /** Atomically reserves one outbound model call for the current UTC day. */
+    public boolean reserveDailyRequest(int dailyLimit) {
+        return Boolean.TRUE.equals(jdbcTemplate.queryForObject("""
+                WITH reservation AS (
+                    INSERT INTO ai_model_daily_budget (usage_date, request_count, updated_at)
+                    VALUES ((CURRENT_TIMESTAMP AT TIME ZONE 'UTC')::date, 1, CURRENT_TIMESTAMP)
+                    ON CONFLICT (usage_date) DO UPDATE
+                    SET request_count = ai_model_daily_budget.request_count + 1,
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE ai_model_daily_budget.request_count < ?
+                    RETURNING request_count
+                )
+                SELECT EXISTS (SELECT 1 FROM reservation)
+                """, Boolean.class, dailyLimit));
+    }
+
+    @Transactional
+    public int purgeExpiredData(int retentionDays) {
+        var deletedAttempts = jdbcTemplate.update("""
+                DELETE FROM ai_diagnosis_attempt
+                WHERE created_at < CURRENT_TIMESTAMP - (? * INTERVAL '1 day')
+                """, retentionDays);
+        jdbcTemplate.update("""
+                DELETE FROM ai_model_daily_budget
+                WHERE usage_date < (CURRENT_TIMESTAMP AT TIME ZONE 'UTC')::date - ?
+                """, retentionDays);
+        return deletedAttempts;
     }
 
     public void completeAttempt(UUID attemptId, String status, String responseJson, String failureCode, String failureReason) {

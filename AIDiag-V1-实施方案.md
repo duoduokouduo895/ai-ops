@@ -1,6 +1,6 @@
 # AIDiag V1 实施方案
 
-> 文档版本：V1.1（Stage 4 模型选型基线）  
+> 文档版本：V1.2（Stage 4 DeepSeek 接入基线）  
 > 更新日期：2026-07-13  
 > 定位：面向 Java 微服务的只读智能诊断层。第一批真实接入目标为 AI-chat，并以受控 Fault Lab 完成故障评测。
 
@@ -162,6 +162,20 @@ Java 21 不是 Spring Boot 4 的最低硬性要求；Spring Boot 4.1 最低支�
 - 不使用即将于 2026-07-24 23:59（北京时间）弃用的 `deepseek-chat` 或 `deepseek-reasoner` 兼容名称，代码和配置只写 `deepseek-v4-flash`。
 - API Key 只能作为云端文件型 Secret 挂载，不进入 Git、`.env.cloud`、Compose environment、日志或诊断审计；启用前还需确定数据出境范围、保留期、单次 token 上限、每日费用上限和 429/5xx 重试策略。
 - 先用受限额度账号完成真实 Provider 契约测试，再把 `AIDIAG_STAGE4_ENABLED` 改为 `true`。测试至少覆盖连接/读取超时、JSON Output、超长或截断输出、429、5xx、无余额、无效 Key 和敏感字段不出境。
+
+当前低额度运行边界固定如下：
+
+| 边界 | 默认值 | 实现方式 |
+|---|---:|---|
+| 每日模型请求 | 20 次/UTC 日 | PostgreSQL 原子预留，多实例并发也不能突破；达到上限后不调用模型 |
+| 单次输入 | 最多 16,000 字符 | 只允许脱敏后的 Incident/确定性报告/evidence 摘要/Runbook allowlist，超限直接降级 |
+| 单次输出 | 最多 1,200 tokens | 每次请求通过 `OpenAiChatOptions.maxTokens` 强制限制 |
+| 自动重试 | 0 次 | Spring AI 全局 `max-attempts=1`，单次请求 `maxRetries=0`，避免 429/5xx 重复计费 |
+| 请求超时 | 12 秒 | 业务 Future 与 Provider HTTP 请求同时限制 |
+| thinking | 关闭 | 每次请求通过 `extraBody` 显式发送 `thinking.type=disabled` |
+| Stage 4 审计保留 | 30 天 | 每日清理过期 `ai_diagnosis_attempt` 和历史预算行，不影响确定性报告 |
+
+允许发送的数据只有：Incident ID、服务名、告警名、严重级别、确定性候选根因、验证状态、支持分、最多 12 条 evidence 的 ID/类型/来源/脱敏摘要，以及最多 5 条受控 Runbook action。禁止发送原始日志、原始指标/Trace、Alertmanager annotation、用户 Prompt、AI-chat 完整问答、Cookie、Token、连接串和其他 Secret。
 
 选型依据：[DeepSeek API 首次调用](https://api-docs.deepseek.com/)、[模型与价格](https://api-docs.deepseek.com/zh-cn/quick_start/pricing)、[Thinking Mode](https://api-docs.deepseek.com/guides/thinking_mode)、[Spring AI OpenAI Chat](https://docs.spring.io/spring-ai/reference/api/chat/openai-chat.html)。
 
@@ -575,7 +589,8 @@ Smoke 功能使用 `POST /internal/smoke/telemetry`，且只在 `AIDIAG_SMOKE_EN
 - [x] [本地实现] 模型输出只能引用给定 evidenceId 和受控 Runbook action；任何无效输出、超时、不可用或异常都记录为 `REJECTED`/`FALLBACK`，且绝不改写 `diagnosis_report.primary_root_cause_id`；
 - [x] [云端实施] 在 release `20260712-stage4-4` 以 `AIDIAG_STAGE4_ENABLED=false` 部署基础能力；禁用态接口为 404，审计表为空；
 - [x] [模型选型] 选择 DeepSeek 官方 API 与 `deepseek-v4-flash`；首轮按非 thinking、单轮、JSON Output 模式接入，不使用即将弃用的兼容模型名；
-- [ ] [Provider 接入] 加入 `spring-ai-starter-model-openai`、文件型 API Key、DeepSeek 专用 `extraBody`、输出 token 上限与 Provider 超时配置；数据出境范围、保留期和费用上限仍需在启用前确认；
+- [x] [本地实现] 加入 `spring-ai-starter-model-openai`、DeepSeek 专用 `extraBody`、JSON Output、输出 token 上限、双层超时和零自动重试；基础栈仍通过 `spring.ai.model.chat=none` 保持禁用；
+- [x] [本地实现] 增加 PostgreSQL 原子每日 20 次配额、16,000 字符输入上限和 30 天 Stage 4 审计清理；新增 `compose.stage4.yaml`，只在两个文件型 Secret 就绪后叠加启用；
 - [x] [共同验收] 以测试 `Stage4ModelClient` 验证超时中断、模型不可用、虚构 evidenceId、越权 Runbook action、禁用态和降级分类；
 - [ ] [Provider 验收] 选定 Provider 后，使用受限测试账号验证真实 SDK 的连接/读取超时、原生结构化输出差异、费用上限和数据出境边界。
 
@@ -594,7 +609,8 @@ Smoke 功能使用 `POST /internal/smoke/telemetry`，且只在 `AIDIAG_SMOKE_EN
 ## 13. 开工清单
 
 - [x] 确定模型 Provider 和模型名：DeepSeek 官方 API / `deepseek-v4-flash`；
-- [ ] 确定模型数据出境范围、保留期、费用上限和受限测试账号；
+- [x] 确定模型数据出境范围、30 天保留期、每日 20 次/单次 1,200 tokens 费用边界；
+- [ ] 使用受限测试账号完成真实 DeepSeek API 契约验收；
 - [x] 创建模块化单体骨架；
 - [x] 建立 Flyway 初始迁移及状态约束；
 - [x] 创建 versions.env、镜像 digest 锁定和 Compose 基础设施；

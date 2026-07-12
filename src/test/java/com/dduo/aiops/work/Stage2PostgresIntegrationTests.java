@@ -15,6 +15,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 
 import com.dduo.aiops.alerts.AlertmanagerWebhookService;
+import com.dduo.aiops.aid.Stage4Repository;
 import com.dduo.aiops.diagnosis.DiagnosisReportController;
 import com.dduo.aiops.diagnosis.Stage3DiagnosisRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -26,6 +27,7 @@ import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.transaction.annotation.Transactional;
 
 /** Runs only from the Compose test profile against the real PostgreSQL service. */
 @Tag("integration")
@@ -44,6 +46,9 @@ class Stage2PostgresIntegrationTests {
     private Stage3DiagnosisRepository stage3DiagnosisRepository;
 
     @Autowired
+    private Stage4Repository stage4Repository;
+
+    @Autowired
     private DiagnosisReportController diagnosisReportController;
 
     @Autowired
@@ -53,6 +58,16 @@ class Stage2PostgresIntegrationTests {
     private ObjectMapper objectMapper;
 
     private final List<TestScope> scopes = new ArrayList<>();
+
+    @Test
+    @Transactional
+    void stageFourDailyBudgetIsAtomicAndBounded() {
+        jdbcTemplate.update("DELETE FROM ai_model_daily_budget WHERE usage_date = (CURRENT_TIMESTAMP AT TIME ZONE 'UTC')::date");
+
+        assertThat(stage4Repository.reserveDailyRequest(2)).isTrue();
+        assertThat(stage4Repository.reserveDailyRequest(2)).isTrue();
+        assertThat(stage4Repository.reserveDailyRequest(2)).isFalse();
+    }
 
     @AfterEach
     void cleanUp() {

@@ -1,7 +1,7 @@
 # AIDiag V1 实施方案
 
-> 文档版本：V1.3（Stage 4 DeepSeek 云端验收完成）
-> 更新日期：2026-07-13  
+> 文档版本：V1.4（Stage 5 AI-chat 接入收紧）
+> 更新日期：2026-07-13
 > 定位：面向 Java 微服务的只读智能诊断层。第一批真实接入目标为 AI-chat，并以受控 Fault Lab 完成故障评测。
 
 ---
@@ -36,7 +36,7 @@ V1 的成功闭环：
 - Metrics、Logs、Traces 三类证据；
 - PostgreSQL 持久化的任务领取、租约、重试和审计；
 - 受控 Tool Calling、结构化输出和 evidenceId 校验；
-- 数据库慢查询、HikariCP 耗尽、下游超时、线程池耗尽四类稳定故障；
+- Fault Lab 保留数据库慢查询、HikariCP 耗尽、下游超时、线程池耗尽四类稳定故障；AI-chat 接入使用 R2DBC Pool、模型、文档队列和搜索链路的真实故障模型；
 - Top-1、Top-3、诊断耗时、证据完整率等评测；
 - AI-chat 可按统一遥测契约接入。
 
@@ -349,7 +349,7 @@ Runbook/变更匹配     5 分
 - REJECTED：验证失败或存在强反对证据；
 - INSUFFICIENT_EVIDENCE：证据不足，拒绝给出确定根因。
 
-每类故障必须有确定性验证器。例如 HikariCP 耗尽需检查 active 接近上限、pending 升高，并同时发现连接超时日志或数据库相关慢 Trace。
+每类故障必须有确定性验证器。例如 Fault Lab 的 HikariCP 耗尽需检查 active 接近上限、pending 升高，并同时发现连接超时日志或数据库相关慢 Trace；AI-chat 的连接池规则必须改查 R2DBC Pool 的 allocated/acquired/pending 和获取连接超时，不能复用 Hikari 指标。
 
 ### 7.5 报告约束
 
@@ -383,13 +383,29 @@ LLM 调用与工具调用均需限流和熔断
 
 ## 9. AI-chat 接入契约
 
-AI-chat 通过遥测协议接入，不依赖 AIDiag 的业务代码。它必须提供：
+AI-chat 通过遥测协议接入，不依赖 AIDiag 的业务代码。当前真实基线为 Spring Boot 3.3.0、Java 17、WebFlux、R2DBC、RabbitMQ、Elasticsearch、Redis 和 LangChain4j；Stage 5 不要求升级 Java 21，也不把 Spring AI 引入 AI-chat。两个项目只通过 Prometheus、Alertmanager、Loki、OTLP 和 AIDiag HTTP API 形成协议级边界。
+
+### 9.1 部署与私有网络
+
+V1 推荐把 AI-chat backend 以独立 Compose Project 部署到现有 GCP Docker 主机，并加入 AIDiag 已创建的外部网络 `aidiag-telemetry`。AI-chat 业务入口继续由既有反向代理提供，管理端口、`/actuator/prometheus` 和 Alloy OTLP 4318 不映射到公网。
+
+AI-chat 和 AIDiag 必须保持独立发布目录、独立回滚指针和独立资源上限；不得把两个仓库复制到同一 release，也不得让一次 AIDiag 回滚重启 AI-chat。AI-chat backend 初始内存上限为 1.5～2 GiB，发布前后记录宿主机可用内存、磁盘、容器重启次数和 JVM heap。
+
+部署制品采用“本地 Git 归档源码 -> 校验 SHA-256 -> 云端 Docker 多阶段构建 -> 健康门禁 -> 切换 release”。不要求用户手工执行 Maven、生成 Jar 或上传 Jar；云端宿主机也不需要安装 JDK。不得上传 `target/`、`node_modules/`、本地 `.env`、Nacos 导出 Secret 或 IDE 文件。
+
+在现有 SSH 直连保持可用的前提下，Codex 负责生成归档、上传、云端构建、切换和验收。用户在首次部署前只需确认 AI-chat 的正式域名/反向代理入口、允许的维护窗口，以及现有 Nacos 配置和第三方 Provider Secret 是否继续沿用；只有发现云端缺失且无法从现有运行配置安全确认的 Secret 时，才需要用户重新提供。用户不需要通过宝塔上传 Jar。
+
+### 9.2 遥测契约
+
+AI-chat 必须提供：
 
 - Actuator 和 /actuator/prometheus；
 - OTel Java Agent，向 Alloy 的 4318 端口上报 Trace；
 - 标准 JSON 日志和 traceId/spanId；
 - 第 3.2 节资源属性；
 - 服务名、环境、指标映射和告警阈值的注册配置。
+
+Prometheus endpoint 必须位于独立 management port，只允许私有 Docker telemetry 网络访问。AI-chat 增加 `micrometer-registry-prometheus` 时不手工覆盖版本，由 Spring Boot BOM 管理；OTel Java Agent 首轮与 AIDiag 对齐为已验证的 2.29.0，并固定 digest/校验和。Metrics 走 Prometheus，Trace 走 OTLP，日志走共享只读文件卷，避免同一信号重复导出。
 
 AI-chat 专属指标：
 
@@ -402,16 +418,25 @@ AI-chat 专属指标：
 
 GenAI 语义约定仍在演进。V1 使用稳定内部命名空间（如 aichat.*）作为长期指标契约，并通过适配层映射至 OTel GenAI 语义；不把实验性字段直接写死为数据库或告警契约。
 
+所有指标 tag 必须来自有限枚举；禁止使用 userId、conversationId、Prompt、URL 查询参数、异常全文或任意模型输入作为 tag。发送到 Loki 的运维日志只允许事件名、结果、错误类别、耗时、traceId/spanId 和受控服务属性；现有包含用户或会话标识的业务日志不得未经清理直接采集。OTel Agent 默认不采集请求/响应正文，Stage 5 也不得通过自定义 span attribute 补录 Prompt 或回答。
+
+### 9.3 AIDiag 规则与前端边界
+
+Stage 3 的 Fault Lab 规则不得继续作为 AI-chat 规则入口。`RuleBasedDiagnosisService` 需要收敛为按 `(serviceName, alertName)` 选择的固定规则注册表，至少隔离 `FaultLabDiagnosisRuleProvider` 与 `AiChatDiagnosisRuleProvider`。PromQL/LogQL 只能来自代码或版本化配置中的固定模板，不能把告警 annotation 或任意 label 直接拼入查询。
+
+Stage 5 的展示面先使用 Grafana Dashboard。自研页面不是打通监控闭环的前置条件；只有真实 Incident 闭环验收后，才在现有 AI-chat `frontend_admin` 中增加“智能运维”模块。浏览器不得持有 AIDiag Stage 4 Operator Secret，AI 建议必须由受 ADMIN 保护的服务端 BFF 调用 AIDiag 私有 API。前端实施前还必须补齐 Incident API 鉴权、分页、筛选和审计。
+
 ---
 
 ## 10. 故障实验与评测
 
 | 故障 | 注入方式 | 必须验证的信号 |
 |---|---|---|
-| 数据库慢查询 | 模拟慢 SQL 或查询延迟 | P95、DB Span、慢查询或错误日志 |
-| HikariCP 耗尽 | 小连接池、并发占用、延迟释放 | active/pending、连接超时、DB Trace |
-| 下游超时 | Payment 固定延迟 | Order 延迟、HTTP 超时、Payment Span |
-| 线程池耗尽 | 小线程池、慢任务、有界队列 | active/queue/reject、异常日志、接口延迟 |
+| AI-chat 数据库慢查询 | 隔离测试 profile 注入查询延迟 | API/DB P95、R2DBC Span、受控慢查询事件 |
+| AI-chat R2DBC Pool 耗尽 | 小连接池、并发占用、延迟释放 | acquired/allocated/pending、获取连接超时、DB Trace |
+| AI-chat 模型超时 | 测试 Provider 固定延迟，不调用真实付费模型制造故障 | TTFT、流超时、Provider outcome、SSE 错误事件 |
+| AI-chat 文档积压 | 暂停隔离消费者或限制消费速率 | outbox oldest age、RabbitMQ backlog、重试/失败事件 |
+| AI-chat 搜索不可用 | 隔离测试实例阻断 Elasticsearch | RAG/搜索耗时与错误、Elasticsearch Span、降级日志 |
 
 每类故障至少 5 次；20 次仅是冒烟基线。正式效果结论还必须加入：无故障对照、不同强度和随机种子、未知/弱信号、双故障组合、规则基线与规则+LLM 对比、Ground Truth、模型/Prompt/工具版本和证据快照。
 
@@ -598,11 +623,44 @@ Smoke 功能使用 `POST /internal/smoke/telemetry`，且只在 `AIDIAG_SMOKE_EN
 
 ### 阶段 5：AI-chat Onboarding 与评测
 
-- [本地实现] 按第 9 章改造 AI-chat，并生成告警和 Dashboard；
-- [用户云端] 部署 AI-chat 遥测配置和 AIDiag 更新；
-- [共同验收] 运行可重复实验并输出真实统计。
+#### Stage 5.0：部署与私有网络基线（P0）
 
-验收：AI-chat 的告警可生成引用其真实遥测证据的诊断报告。
+- [ ] [本地实现] 为 AI-chat backend 增加 `.dockerignore`、Java 17 多阶段 `Dockerfile`、版本锁定、独立 Compose、健康检查、资源上限和 release/rollback 脚本；
+- [ ] [本地验证] 从干净 Git 归档完成 Docker build 和应用测试；镜像中不得包含源码、构建缓存、前端 `node_modules` 或 Secret；
+- [ ] [云端实施] 上传源码归档及 SHA-256，在独立 release 构建 AI-chat；连接现有中间件网络和外部 `aidiag-telemetry`，但不公开 management/OTLP 端口；
+- [ ] [共同验收] 验证业务健康、依赖连接、容器资源、重启次数、回滚和 AIDiag/AI-chat 互不连带重启。
+
+门禁：AI-chat 正常业务链保持可用；Prometheus/Alloy 能通过私有网络访问目标；公网无法直接访问 management port 和 4318；回滚不丢业务数据。
+
+#### Stage 5.1：AI-chat 遥测与隐私收紧（P0）
+
+- [ ] [本地实现] 增加 BOM 管理的 Prometheus registry、独立 management port 和受网络隔离的 `/actuator/prometheus`；
+- [ ] [本地实现] 为 SSE 主链增加请求结果、TTFT、完整耗时、活跃流、取消/超时和 Provider outcome；为 R2DBC、RabbitMQ outbox、Elasticsearch/RAG 增加必要的低基数指标；
+- [ ] [本地实现] 接入固定 OTel Java Agent 2.29.0，只向 Alloy 导出 Trace；增加脱敏 JSON 运维日志和 traceId/spanId，禁止采集 Prompt、回答、用户/会话标识和 Secret；
+- [ ] [测试] 覆盖成功、错误、取消、超时、重复订阅和高并发；验证 tag 基数有界、请求正文不进入 metric/log/span；
+- [ ] [云端验收] Prometheus 连续抓取成功，Loki 可按 service_name/event 查询，Tempo 可定位一次真实测试请求的 Trace。
+
+门禁：三类信号可由同一 traceId/时间窗关联；日志与 Trace 抽样检查不含隐私数据；遥测失败不阻断聊天主链。
+
+#### Stage 5.2：AIDiag AI-chat 诊断规则（必要 P0 + Trace P1）
+
+- [ ] [P0 本地实现] 将硬编码 Fault Lab 规则拆为固定规则注册表，保留现有 Fault Lab 行为并增加 AI-chat Provider；
+- [ ] [P0 本地实现] 首批只实现 `AiChatModelTimeout`、`AiChatR2dbcPoolExhaustion`、`AiChatDocumentBacklog`、`AiChatSearchUnavailable` 四类规则；每类固定 PromQL、LogQL、阈值、Ground Truth、候选根因和受控 Runbook action；
+- [ ] [P0 测试] 验证未知 service/alert、缺失指标、缺失日志、非法 label、超大响应和重复告警只产生可审计的证据不足结果，不伪造主要根因；
+- [ ] [必要 P1] 增加 Tempo Trace evidence collector，限制单次 50 条、10 秒超时和响应大小；Trace 不可用时必须降级为 Metric/Log 报告；
+- [ ] [云端实施] 增加 AI-chat Prometheus scrape、告警规则、Alloy 日志源和 Grafana Dashboard，并发布 AIDiag 新 release。
+
+门禁：现有 Stage 3 四类 Fault Lab 回归继续通过；AI-chat 告警可以自动建单并引用真实 Metric/Log evidence，Trace P1 失败时不影响 P0 报告。
+
+#### Stage 5.3：隔离故障实验与端到端验收（P0）
+
+- [ ] [本地实现] 提供只在隔离 test profile 启用、需要独立 Secret 的故障开关和清理脚本；禁止在真实用户实例直接注入数据库、中间件或 Provider 故障；
+- [ ] [共同验收] 对四类 AI-chat 故障分别完成 firing、Incident、证据、确定性报告、恢复和 resolved；每类先做 5 次冒烟，再决定是否扩展正式样本；
+- [ ] [共同验收] 手动触发一次 Stage 4 DeepSeek 建议，确认 advice 引用既有 evidenceId、每日配额增加一次、`automatedRemediation=false` 且不改写确定性报告；
+- [ ] [结果归档] 记录无故障对照、失败样本、告警到建单耗时、告警到报告耗时、证据完整性、弃权结果和实际模型费用；未测量前不得声称准确率；
+- [ ] [展示门禁] 先交付 AI-chat Grafana Dashboard；只有端到端闭环通过后，另立前端子阶段扩展现有 `frontend_admin`，不在 Stage 5 P0 内新建第三套前端。
+
+总验收：AI-chat 的真实告警可生成引用其真实遥测证据的确定性诊断报告；数据采集不包含 Prompt、回答、用户/会话标识或 Secret；模型失败不影响规则报告；AIDiag 故障不阻断 AI-chat 主业务；部署和回滚均不要求手工上传 Jar。
 
 ---
 
@@ -618,6 +676,9 @@ Smoke 功能使用 `POST /internal/smoke/telemetry`，且只在 `AIDIAG_SMOKE_EN
 - [x] 定义遥测、日志、告警 label 与 AI-chat 接入契约；
 - [x] 建立合成遥测端到端测试；
 - [x] 完成阶段 0 验收；可进入最小 Fault Lab 的业务服务实现。
+- [ ] 完成 AI-chat 独立 Docker 构建、私有 telemetry 网络和回滚基线；
+- [ ] 完成 AI-chat 遥测隐私审查后再允许 Loki/Tempo 采集；
+- [ ] 完成四类 AI-chat 规则和隔离故障验收后再启动自研运维前端。
 
 ---
 

@@ -17,7 +17,21 @@ next_link="${base_dir}/.current.next"
 [[ -f "${runtime_dir}/.env.cloud" && -d "${runtime_dir}/.secrets" ]] || { echo "Runtime config is missing" >&2; exit 67; }
 
 export AIDIAG_SECRETS_DIR="${runtime_dir}/.secrets"
-compose=(docker compose --project-directory "${release}" -f "${release}/compose.yaml" \
+
+set_compose_files() {
+  local target_release="$1"
+  compose_files=(-f "${target_release}/compose.yaml")
+  if [[ -f "${target_release}/compose.stage4.yaml" ]]; then
+    [[ -s "${runtime_dir}/.secrets/aidiag_deepseek_api_key" \
+      && -s "${runtime_dir}/.secrets/aidiag_stage4_operator_secret" ]] \
+      || { echo "Stage 4 secret files are missing" >&2; return 68; }
+    compose_files+=(-f "${target_release}/compose.stage4.yaml")
+  fi
+}
+
+declare -a compose_files
+set_compose_files "${release}"
+compose=(docker compose --project-directory "${release}" "${compose_files[@]}" \
   --env-file "${release}/versions.env" --env-file "${runtime_dir}/.env.cloud")
 
 "${compose[@]}" config --quiet
@@ -31,14 +45,16 @@ fi
 ln -s "${release}" "${next_link}"
 mv -Tf "${next_link}" "${current_link}"
 
-current_compose=(docker compose --project-directory "${current_link}" -f "${current_link}/compose.yaml" \
+set_compose_files "${current_link}"
+current_compose=(docker compose --project-directory "${current_link}" "${compose_files[@]}" \
   --env-file "${current_link}/versions.env" --env-file "${runtime_dir}/.env.cloud")
 "${current_compose[@]}" down --remove-orphans
 if ! "${current_compose[@]}" up -d; then
   if [[ -n "${previous_release}" ]]; then
     ln -s "${previous_release}" "${next_link}"
     mv -Tf "${next_link}" "${current_link}"
-    docker compose --project-directory "${current_link}" -f "${current_link}/compose.yaml" \
+    set_compose_files "${current_link}"
+    docker compose --project-directory "${current_link}" "${compose_files[@]}" \
       --env-file "${current_link}/versions.env" --env-file "${runtime_dir}/.env.cloud" up -d || true
   fi
   echo "Activation failed; current link was restored when a previous release existed." >&2

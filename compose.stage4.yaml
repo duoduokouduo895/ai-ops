@@ -3,6 +3,7 @@
 services:
   aidiag-backend:
     environment:
+      AIDIAG_STAGE4_ENABLED: "true"
       AIDIAG_STAGE4_CHAT_MODEL: openai
       AIDIAG_DEEPSEEK_BASE_URL: https://api.deepseek.com
       AIDIAG_DEEPSEEK_MODEL: deepseek-v4-flash

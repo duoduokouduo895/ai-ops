@@ -45,14 +45,14 @@ isolated Fault Lab control-state metric and must not be reused for production he
 Stage 4 supplies a disabled-by-default, authenticated operator-triggered Spring AI preview
 boundary. It persists advisory attempts separately, validates that model output
 references only supplied evidence and controlled runbook actions, and never
-performs remediation or changes the deterministic primary root cause. No model
+performs remediation or changes the deterministic primary root cause.
 The reviewed provider adapter is the official DeepSeek API with `deepseek-v4-flash` through
 Spring AI's OpenAI-compatible starter. Every request disables thinking, requests JSON output,
 allows no automatic retry, caps output at 1,200 tokens, and remains subject to an atomic
 20-request UTC daily budget. Dedicated provider/operator credentials are mounted only by
-`compose.stage4.yaml`; passing real-provider contract tests remains a deployment gate.
-The provider-neutral Stage 4 foundation is deployed with `AIDIAG_STAGE4_ENABLED=false`;
-real-provider acceptance is intentionally still pending.
+`compose.stage4.yaml`. Release `20260713-stage4-deepseek-1` is deployed with this overlay and
+passed an authenticated real-provider request; the base Compose file still keeps Stage 4
+disabled so rollback to a release without the overlay does not retain model access.
 
 ## Build
 

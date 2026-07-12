@@ -1,6 +1,6 @@
 # AIDiag V1 实施方案
 
-> 文档版本：V1.2（Stage 4 DeepSeek 接入基线）  
+> 文档版本：V1.3（Stage 4 DeepSeek 云端验收完成）
 > 更新日期：2026-07-13  
 > 定位：面向 Java 微服务的只读智能诊断层。第一批真实接入目标为 AI-chat，并以受控 Fault Lab 完成故障评测。
 
@@ -583,7 +583,7 @@ Smoke 功能使用 `POST /internal/smoke/telemetry`，且只在 `AIDIAG_SMOKE_EN
 
 ### 阶段 4：Spring AI 增强
 
-- [x] [本地实现] 使用 `spring-ai-bom:2.0.0`、`spring-ai-client-chat` 和 `spring-ai-model` 建立 Provider 无关适配边界；不引入任何模型 Provider starter；
+- [x] [本地实现] 使用 `spring-ai-bom:2.0.0`、`spring-ai-client-chat` 和 `spring-ai-model` 建立 Provider 无关适配边界；选定 DeepSeek 后，仅增加一个 `spring-ai-starter-model-openai` 作为 OpenAI 兼容传输实现，不引入第二套 AI 编排框架；
 - [x] [本地实现] 增加显式触发的 `POST /api/v1/incidents/{incidentId}/ai-diagnosis-preview`、独立 Operator Basic Auth、结构化输出校验和 `ai_diagnosis_attempt` 审计表；
 - [x] [本地实现] 仅发送经过长度限制的服务、告警、确定性报告字段与 evidence 摘要；不发送原始遥测、告警 annotation、用户 Prompt 或 Secret；
 - [x] [本地实现] 模型输出只能引用给定 evidenceId 和受控 Runbook action；任何无效输出、超时、不可用或异常都记录为 `REJECTED`/`FALLBACK`，且绝不改写 `diagnosis_report.primary_root_cause_id`；
@@ -592,9 +592,9 @@ Smoke 功能使用 `POST /internal/smoke/telemetry`，且只在 `AIDIAG_SMOKE_EN
 - [x] [本地实现] 加入 `spring-ai-starter-model-openai`、DeepSeek 专用 `extraBody`、JSON Output、输出 token 上限、双层超时和零自动重试；基础栈仍通过 `spring.ai.model.chat=none` 保持禁用；
 - [x] [本地实现] 增加 PostgreSQL 原子每日 20 次配额、16,000 字符输入上限和 30 天 Stage 4 审计清理；新增 `compose.stage4.yaml`，只在两个文件型 Secret 就绪后叠加启用；
 - [x] [共同验收] 以测试 `Stage4ModelClient` 验证超时中断、模型不可用、虚构 evidenceId、越权 Runbook action、禁用态和降级分类；
-- [ ] [Provider 验收] 选定 Provider 后，使用受限测试账号验证真实 SDK 的连接/读取超时、原生结构化输出差异、费用上限和数据出境边界。
+- [x] [Provider 验收] 在云端 release `20260713-stage4-deepseek-1` 挂载独立文件型 Secret；验证未授权请求为 401 且不消耗配额，授权请求通过真实 DeepSeek API 返回结构化建议并落审计，V8 原子配额测试通过。
 
-验收：模型无效输出、超时、虚构 evidenceId 或越权 Runbook action 时，平台安全降级且可审计。默认关闭时不注册预览 Controller，接口返回 404 且不产生审计记录；启用后若未挂载独立 Operator 密码则统一返回 401，不能调用模型。
+验收：模型无效输出、超时、虚构 evidenceId 或越权 Runbook action 时，平台安全降级且可审计。默认关闭时不注册预览 Controller，接口返回 404 且不产生审计记录；启用后若未挂载独立 Operator 密码则统一返回 401，不能调用模型。2026-07-13 的云端证据见 [`docs/verification/2026-07-13-stage4-deepseek-cloud.md`](docs/verification/2026-07-13-stage4-deepseek-cloud.md)。
 
 ### 阶段 5：AI-chat Onboarding 与评测
 
@@ -610,7 +610,7 @@ Smoke 功能使用 `POST /internal/smoke/telemetry`，且只在 `AIDIAG_SMOKE_EN
 
 - [x] 确定模型 Provider 和模型名：DeepSeek 官方 API / `deepseek-v4-flash`；
 - [x] 确定模型数据出境范围、30 天保留期、每日 20 次/单次 1,200 tokens 费用边界；
-- [ ] 使用受限测试账号完成真实 DeepSeek API 契约验收；
+- [x] 使用受限测试账号完成真实 DeepSeek API 契约验收；
 - [x] 创建模块化单体骨架；
 - [x] 建立 Flyway 初始迁移及状态约束；
 - [x] 创建 versions.env、镜像 digest 锁定和 Compose 基础设施；

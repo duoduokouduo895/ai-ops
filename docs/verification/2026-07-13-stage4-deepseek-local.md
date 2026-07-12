@@ -11,11 +11,11 @@
 - 输入只包含受控字段且最多 16,000 字符；Stage 4 请求/响应审计默认保留 30 天。
 - 基础 Compose 和叠加 `compose.stage4.yaml` 的配置均已在云端 Docker Compose v5.1.4 通过 `config --quiet`。
 
-## 尚未验证
+## 后续由云端验收覆盖
 
-- V8 迁移与 PostgreSQL 原子配额测试尚需在隔离的云端集成测试容器执行。
-- DeepSeek 真实 API 的正常 JSON 响应、401、429、5xx、无余额、截断输出和实际延迟尚未验收。
-- `AIDIAG_STAGE4_ENABLED` 仍必须保持 `false`，直至文件型 Key 和 Operator Secret 已挂载并完成真实 Provider 验收。
+- V8 迁移、PostgreSQL 原子配额、未授权请求和 DeepSeek 正常 JSON 响应已于云端验收通过，证据见 [`2026-07-13-stage4-deepseek-cloud.md`](./2026-07-13-stage4-deepseek-cloud.md)。
+- 429、5xx、无余额和截断输出未在真实账号上主动制造；这些分支由测试替身验证安全降级，避免为验收故意消耗额度或制造 Provider 故障。
+- 基础 `compose.yaml` 继续默认禁用 Stage 4；仅部署脚本检测到 `compose.stage4.yaml` 和两个 Secret 时才启用。
 
 ## 安全边界
 

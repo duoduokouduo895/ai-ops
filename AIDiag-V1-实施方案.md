@@ -389,11 +389,17 @@ AI-chat 通过遥测协议接入，不依赖 AIDiag 的业务代码。当前真�
 
 V1 推荐把 AI-chat backend 以独立 Compose Project 部署到现有 GCP Docker 主机，并加入 AIDiag 已创建的外部网络 `aidiag-telemetry`。AI-chat 业务入口继续由既有反向代理提供，管理端口、`/actuator/prometheus` 和 Alloy OTLP 4318 不映射到公网。
 
+截至 2026-07-13，`app.dduo.chat` 是 Cloudflare Pages 前端，本地最新前端通过 `VITE_API_BASE_URL=https://api.dduo.chat/api` 访问后端；`api.dduo.chat` 仍解析到旧云服务器 `119.29.109.190`。Stage 5 不先重发前端，而是在 GCP `34.150.80.173` 将新 backend 绑定到 loopback 候选端口（初始为 `127.0.0.1:18082`），通过 SSH 和内部网络完成验收。GCP 已有 Nginx 占用 80/443，可在候选通过后增加 `api.dduo.chat` virtual host。
+
+正式切换前必须预置 TLS、降低 DNS TTL，并保留旧 A 记录。维护窗口内由用户在 DNSPod 把 `api.dduo.chat` 切到 `34.150.80.173`；验收失败时恢复 `119.29.109.190`。不得在候选实例尚未通过业务、数据迁移、Nacos、健康和遥测门禁前修改 DNS，也不得把容器 8080/management port 直接暴露公网。
+
 AI-chat 和 AIDiag 必须保持独立发布目录、独立回滚指针和独立资源上限；不得把两个仓库复制到同一 release，也不得让一次 AIDiag 回滚重启 AI-chat。AI-chat backend 初始内存上限为 1.5～2 GiB，发布前后记录宿主机可用内存、磁盘、容器重启次数和 JVM heap。
 
 部署制品采用“本地 Git 归档源码 -> 校验 SHA-256 -> 云端 Docker 多阶段构建 -> 健康门禁 -> 切换 release”。不要求用户手工执行 Maven、生成 Jar 或上传 Jar；云端宿主机也不需要安装 JDK。不得上传 `target/`、`node_modules/`、本地 `.env`、Nacos 导出 Secret 或 IDE 文件。
 
 在现有 SSH 直连保持可用的前提下，Codex 负责生成归档、上传、云端构建、切换和验收。用户在首次部署前只需确认 AI-chat 的正式域名/反向代理入口、允许的维护窗口，以及现有 Nacos 配置和第三方 Provider Secret 是否继续沿用；只有发现云端缺失且无法从现有运行配置安全确认的 Secret 时，才需要用户重新提供。用户不需要通过宝塔上传 Jar。
+
+安全门禁：当前 Nacos 对允许访问 8848 的客户端仍可匿名读取配置，且数据库、Redis、LangChain4j、OSS 和 JWT 的部分当前 Secret 与 Git 历史中的旧值一致。候选构建可以先进行，但正式 DNS 切换前必须制定逐项轮换与回滚表，至少覆盖 Nacos 访问控制/网络、MySQL、Redis、RabbitMQ、Elasticsearch、模型 Provider、OSS 和 JWT。不得一次性无回滚地批量替换；JWT 轮换会使现有登录态失效，数据库和中间件凭据轮换还会影响旧实例回退，必须在维护窗口逐项验证。
 
 ### 9.2 遥测契约
 
@@ -628,6 +634,8 @@ Smoke 功能使用 `POST /internal/smoke/telemetry`，且只在 `AIDIAG_SMOKE_EN
 - [ ] [本地实现] 为 AI-chat backend 增加 `.dockerignore`、Java 17 多阶段 `Dockerfile`、版本锁定、独立 Compose、健康检查、资源上限和 release/rollback 脚本；
 - [ ] [本地验证] 从干净 Git 归档完成 Docker build 和应用测试；镜像中不得包含源码、构建缓存、前端 `node_modules` 或 Secret；
 - [ ] [云端实施] 上传源码归档及 SHA-256，在独立 release 构建 AI-chat；连接现有中间件网络和外部 `aidiag-telemetry`，但不公开 management/OTLP 端口；
+- [ ] [安全门禁] 关闭 Nacos 匿名读取或将其收敛到受控网络，生成不回显值的凭据清单，并为每个历史 Secret 定义“新建/切换/验证/撤销/回滚”顺序；
+- [ ] [切换准备] 在 GCP Nginx 预置 `api.dduo.chat`、TLS 和候选 upstream，记录 DNSPod 旧 A 记录、TTL、切换命令与回退条件；
 - [ ] [共同验收] 验证业务健康、依赖连接、容器资源、重启次数、回滚和 AIDiag/AI-chat 互不连带重启。
 
 门禁：AI-chat 正常业务链保持可用；Prometheus/Alloy 能通过私有网络访问目标；公网无法直接访问 management port 和 4318；回滚不丢业务数据。

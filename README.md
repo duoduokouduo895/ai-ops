@@ -2,8 +2,9 @@
 
 AIDiag is an evidence-driven diagnosis layer for Java services. The deployed
 Stage 3 baseline correlates Prometheus metrics and Loki logs, then produces
-auditable incident evidence and diagnosis reports. Tempo is provisioned but
-Trace evidence collection remains a planned P1 enhancement.
+auditable incident evidence and diagnosis reports. Stage 5.2 adds bounded Tempo
+Trace evidence collection as optional corroboration; Trace failure never blocks
+the deterministic Metric/Log baseline.
 
 The implementation baseline is documented in
 [AIDiag-V1-实施方案.md](./AIDiag-V1-实施方案.md). Cloud operations that must be
@@ -54,6 +55,13 @@ allows no automatic retry, caps output at 1,200 tokens, and remains subject to a
 passed an authenticated real-provider request; the base Compose file still keeps Stage 4
 disabled so rollback to a release without the overlay does not retain model access.
 
+Stage 5.1 is deployed on a private AI-chat candidate and correlates bounded chat
+metrics, privacy-safe operation logs, and traces. Stage 5.2 is implemented locally:
+fixed Fault Lab and AI-chat rule providers are selected by exact `(serviceName,
+alertName)`, four AI-chat alert contracts have fixed PromQL/LogQL/TraceQL, and a
+Grafana operations dashboard is provisioned. Cloud release and end-to-end alert
+acceptance remain pending explicit deployment confirmation.
+
 ## Build
 
 Local builds require Java 21:
@@ -98,7 +106,7 @@ Never commit or share the contents of .env.cloud or .secrets.
 
 ## Validation boundaries
 
-The local workstation currently has Java 17 and no Docker. Maven dependency
-resolution and static YAML/JSON/XML validation can run locally, while Java 21
-compilation, Flyway execution, container configuration validation, and telemetry
-smoke tests must run inside the pinned cloud Docker build.
+The local workstation has Java 21 available under `.jdks`; set `JAVA_HOME` to that
+runtime before using the Maven Wrapper. Docker is not installed locally, so Flyway
+integration tests, container configuration validation, and telemetry smoke tests
+still run in the pinned cloud Docker build.

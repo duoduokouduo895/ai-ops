@@ -200,7 +200,7 @@ class Stage2PostgresIntegrationTests {
         var incident = stage3DiagnosisRepository.incident(run.incidentId());
         var evidence = new Stage3DiagnosisRepository.EvidenceDraft("METRIC", "test", incident.startedAt(), incident.lastAlertAt(),
                 "{\"template\":\"test\"}", "test evidence", "{\"matched\":true}", BigDecimal.valueOf(30), true);
-        var result = new Stage3DiagnosisRepository.DiagnosisResult("TEST_RULE", "test-only deterministic result", BigDecimal.valueOf(65),
+        var result = new Stage3DiagnosisRepository.DiagnosisResult("TEST_RULE", "TEST_GROUND_TRUTH", "test-only deterministic result", BigDecimal.valueOf(65),
                 "SUPPORTED", "[]", List.of(new Stage3DiagnosisRepository.ToolObservation("queryServiceMetrics", "{\"template\":\"test\"}",
                 "{\"matched\":true}", "SUCCEEDED", 1, null, evidence)), List.of("integration test"));
 
@@ -238,7 +238,7 @@ class Stage2PostgresIntegrationTests {
         var claimed = new Stage3DiagnosisRepository.ClaimedAnalysisRun(run.id(), run.incidentId(), 1,
                 "stage3-insufficient-test", token);
         var incident = stage3DiagnosisRepository.incident(run.incidentId());
-        var result = new Stage3DiagnosisRepository.DiagnosisResult("NO_DETERMINISTIC_RULE", "missing independent evidence",
+        var result = new Stage3DiagnosisRepository.DiagnosisResult("NO_DETERMINISTIC_RULE", "UNSPECIFIED", "missing independent evidence",
                 BigDecimal.ZERO, "INSUFFICIENT_EVIDENCE", "[]", List.of(), List.of("integration test"));
 
         assertThat(stage3DiagnosisRepository.finalizeReport(claimed, incident, result)).isPresent();
@@ -281,7 +281,7 @@ class Stage2PostgresIntegrationTests {
                 """, "expired-stage3-test", token, run.id());
         var claimed = new Stage3DiagnosisRepository.ClaimedAnalysisRun(run.id(), run.incidentId(), 1, "expired-stage3-test", token);
         var incident = stage3DiagnosisRepository.incident(run.incidentId());
-        var result = new Stage3DiagnosisRepository.DiagnosisResult("TEST_RULE", "must not persist", BigDecimal.ZERO,
+        var result = new Stage3DiagnosisRepository.DiagnosisResult("TEST_RULE", "TEST_GROUND_TRUTH", "must not persist", BigDecimal.ZERO,
                 "INSUFFICIENT_EVIDENCE", "[]", List.of(), List.of("expired lease"));
 
         assertThat(stage3DiagnosisRepository.finalizeReport(claimed, incident, result)).isEmpty();

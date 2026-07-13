@@ -656,13 +656,15 @@ Smoke 功能使用 `POST /internal/smoke/telemetry`，且只在 `AIDIAG_SMOKE_EN
 
 #### Stage 5.2：AIDiag AI-chat 诊断规则（必要 P0 + Trace P1）
 
-- [ ] [P0 本地实现] 将硬编码 Fault Lab 规则拆为固定规则注册表，保留现有 Fault Lab 行为并增加 AI-chat Provider；
-- [ ] [P0 本地实现] 首批只实现 `AiChatModelTimeout`、`AiChatR2dbcPoolExhaustion`、`AiChatDocumentBacklog`、`AiChatSearchUnavailable` 四类规则；每类固定 PromQL、LogQL、阈值、Ground Truth、候选根因和受控 Runbook action；
-- [ ] [P0 测试] 验证未知 service/alert、缺失指标、缺失日志、非法 label、超大响应和重复告警只产生可审计的证据不足结果，不伪造主要根因；
-- [ ] [必要 P1] 增加 Tempo Trace evidence collector，限制单次 50 条、10 秒超时和响应大小；Trace 不可用时必须降级为 Metric/Log 报告；
+- [x] [P0 本地实现] 将硬编码 Fault Lab 规则拆为固定规则注册表，保留现有 Fault Lab 行为并增加 AI-chat Provider；
+- [x] [P0 本地实现] 首批只实现 `AiChatModelTimeout`、`AiChatR2dbcPoolExhaustion`、`AiChatDocumentBacklog`、`AiChatSearchUnavailable` 四类规则；每类固定 PromQL、LogQL、阈值、Ground Truth、候选根因和受控 Runbook action；
+- [x] [P0 测试] 验证未知 service/alert、缺失指标、缺失日志、非法 label、超大响应和重复告警只产生可审计的证据不足结果，不伪造主要根因；
+- [x] [必要 P1] 增加 Tempo Trace evidence collector，限制单次 50 条、10 秒超时和响应大小；Trace 不可用时必须降级为 Metric/Log 报告；
 - [ ] [云端实施] 增加 AI-chat Prometheus scrape、告警规则、Alloy 日志源和 Grafana Dashboard，并发布 AIDiag 新 release。
 
 门禁：现有 Stage 3 四类 Fault Lab 回归继续通过；AI-chat 告警可以自动建单并引用真实 Metric/Log evidence，Trace P1 失败时不影响 P0 报告。
+
+截至 2026-07-13，本地规则、AI-chat 必要低基数指标/脱敏事件、Prometheus 告警和 Grafana Dashboard 已实现；AIDiag 37 项测试通过（10 项需 PostgreSQL 的集成测试因本机无 Docker 跳过），AI-chat 151 项测试通过，`promtool` 校验 10 条规则成功。未知/注入式 service/alert 不触发遥测查询，Metric 或 Log 缺失时不生成主要根因；Tempo 超大或不可用时仍可由 Metric+Log 形成 P0 `SUPPORTED`。重复告警幂等沿用 Stage 2 的 12 并发入站集成用例，代码路径未改变，待新 release 云端构建时再次执行。详细证据见 [`docs/verification/2026-07-13-stage5-2-local.md`](docs/verification/2026-07-13-stage5-2-local.md)。云端发布、自动建单与真实 Metric/Log/Trace 联合验收尚未执行，因此 Stage 5.2 仍未整体完成。
 
 #### Stage 5.3：隔离故障实验与端到端验收（P0）
 

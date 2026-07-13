@@ -109,6 +109,7 @@ aidiag:
     initial-delay-seconds: ${AIDIAG_STAGE3_INITIAL_DELAY_SECONDS:30}
     prometheus-base-url: ${AIDIAG_PROMETHEUS_BASE_URL:http://prometheus:9090}
     loki-base-url: ${AIDIAG_LOKI_BASE_URL:http://loki:3100}
+    tempo-base-url: ${AIDIAG_TEMPO_BASE_URL:http://tempo:3200}
     tool-timeout-seconds: ${AIDIAG_STAGE3_TOOL_TIMEOUT_SECONDS:8}
   stage4:
     enabled: ${AIDIAG_STAGE4_ENABLED:false}

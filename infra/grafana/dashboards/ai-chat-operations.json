@@ -1,0 +1,95 @@
+{
+  "annotations": {"list": []},
+  "description": "Private Stage 5 candidate operations. Missing series mean insufficient telemetry, not a healthy zero.",
+  "editable": false,
+  "graphTooltip": 1,
+  "links": [],
+  "panels": [
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"mappings": [], "thresholds": {"mode": "absolute", "steps": [{"color": "red"}, {"color": "green", "value": 1}]}}, "overrides": []},
+      "gridPos": {"h": 5, "w": 6, "x": 0, "y": 0},
+      "id": 1,
+      "options": {"colorMode": "background", "graphMode": "none", "justifyMode": "auto", "orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "auto", "wideLayout": true},
+      "targets": [{"editorMode": "code", "expr": "up{job=\"ai-chat-candidate\"}", "instant": true, "legendFormat": "candidate", "range": false, "refId": "A"}],
+      "title": "Candidate scrape up",
+      "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"unit": "short"}, "overrides": []},
+      "gridPos": {"h": 5, "w": 6, "x": 6, "y": 0},
+      "id": 2,
+      "options": {"colorMode": "value", "graphMode": "area", "justifyMode": "auto", "orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "auto", "wideLayout": true},
+      "targets": [{"editorMode": "code", "expr": "aichat_chat_streams_active{service_name=\"ai-chat-candidate\"}", "instant": false, "legendFormat": "active", "range": true, "refId": "A"}],
+      "title": "Active chat streams",
+      "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"unit": "short", "thresholds": {"mode": "absolute", "steps": [{"color": "green"}, {"color": "red", "value": 1}]}}, "overrides": []},
+      "gridPos": {"h": 5, "w": 6, "x": 12, "y": 0},
+      "id": 3,
+      "options": {"colorMode": "value", "graphMode": "area", "justifyMode": "auto", "orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "auto", "wideLayout": true},
+      "targets": [{"editorMode": "code", "expr": "sum(increase(aichat_chat_requests_total{service_name=\"ai-chat-candidate\",outcome=\"timeout\"}[5m]))", "instant": false, "legendFormat": "timeouts", "range": true, "refId": "A"}],
+      "title": "Model timeouts (5m)",
+      "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"unit": "s"}, "overrides": []},
+      "gridPos": {"h": 5, "w": 6, "x": 18, "y": 0},
+      "id": 4,
+      "options": {"colorMode": "value", "graphMode": "area", "justifyMode": "auto", "orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "auto", "wideLayout": true},
+      "targets": [{"editorMode": "code", "expr": "histogram_quantile(0.95, sum by (le) (rate(aichat_chat_ttft_seconds_bucket{service_name=\"ai-chat-candidate\"}[5m])))", "instant": false, "legendFormat": "p95", "range": true, "refId": "A"}],
+      "title": "Chat TTFT P95 (5m)",
+      "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"unit": "short"}, "overrides": []},
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 5},
+      "id": 5,
+      "options": {"legend": {"calcs": ["lastNotNull", "max"], "displayMode": "table", "placement": "bottom", "showLegend": true}, "tooltip": {"mode": "multi", "sort": "desc"}},
+      "targets": [
+        {"editorMode": "code", "expr": "aichat_r2dbc_pool_pending{service_name=\"ai-chat-candidate\"}", "legendFormat": "R2DBC pending", "range": true, "refId": "A"},
+        {"editorMode": "code", "expr": "aichat_document_outbox_pending{service_name=\"ai-chat-candidate\"}", "legendFormat": "document pending", "range": true, "refId": "B"}
+      ],
+      "title": "Capacity and backlog",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"unit": "ops"}, "overrides": []},
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 5},
+      "id": 6,
+      "options": {"legend": {"calcs": ["lastNotNull", "sum"], "displayMode": "table", "placement": "bottom", "showLegend": true}, "tooltip": {"mode": "multi", "sort": "desc"}},
+      "targets": [
+        {"editorMode": "code", "expr": "sum by (outcome) (rate(aichat_search_requests_total{service_name=\"ai-chat-candidate\"}[5m]))", "legendFormat": "search {{outcome}}", "range": true, "refId": "A"},
+        {"editorMode": "code", "expr": "sum by (outcome) (rate(aichat_document_outbox_events_total{service_name=\"ai-chat-candidate\"}[5m]))", "legendFormat": "outbox {{outcome}}", "range": true, "refId": "B"}
+      ],
+      "title": "Search and document outcomes",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "loki", "uid": "loki"},
+      "gridPos": {"h": 9, "w": 24, "x": 0, "y": 13},
+      "id": 7,
+      "options": {"dedupStrategy": "none", "enableLogDetails": true, "prettifyLogMessage": false, "showCommonLabels": false, "showLabels": false, "showTime": true, "sortOrder": "Descending", "wrapLogMessage": false},
+      "targets": [{"editorMode": "code", "expr": "{service_name=\"ai-chat-candidate\"} | json | event != ``", "queryType": "range", "refId": "A"}],
+      "title": "Privacy-safe operational events",
+      "type": "logs"
+    }
+  ],
+  "preload": false,
+  "refresh": "30s",
+  "schemaVersion": 42,
+  "tags": ["aidiag", "ai-chat", "stage5"],
+  "templating": {"list": []},
+  "time": {"from": "now-1h", "to": "now"},
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "AI-chat Stage 5 Operations",
+  "uid": "aichat-stage5-ops",
+  "version": 1
+}

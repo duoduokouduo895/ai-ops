@@ -165,15 +165,16 @@ public class Stage3DiagnosisRepository {
         report.put("candidateId", candidateId.toString());
         report.put("primaryRootCauseCandidateId", primaryRootCauseId == null ? null : primaryRootCauseId.toString());
         report.put("candidate", result.candidateName());
+        report.put("evaluationGroundTruth", result.groundTruth());
         report.put("supportScore", result.supportScore());
         report.put("verificationStatus", result.verificationStatus());
         report.put("supportingEvidenceIds", supportingEvidenceIds);
         report.put("opposingEvidenceIds", opposingEvidenceIds);
         report.put("remediationTemplate", result.remediationJson());
         report.put("verificationSuggestion", result.isSupported()
-                ? "关闭受控故障并执行一次正常请求，确认告警和服务状态恢复。"
+                ? "恢复对应依赖或关闭隔离故障，再执行一次隐私安全的正常探测，确认告警和服务状态恢复。"
                 : "补充遥测采集后重试；当前证据不足，不应执行基于该候选的处置。");
-        report.put("riskWarning", "本报告只使用固定 Fault Lab 规则，不执行自动修复，也不调用 LLM。");
+        report.put("riskWarning", "本报告只使用版本化固定规则，不执行自动修复，也不调用 LLM；Ground Truth 仅用于隔离故障实验评测。");
         report.put("limitations", result.limitations());
         report.put("automatedRemediation", false);
         return json(report);
@@ -189,8 +190,8 @@ public class Stage3DiagnosisRepository {
                 + incident.primaryService() + "`\n" + "- 告警: `" + incident.alertName() + "`\n\n" + "## 结论\n\n"
                 + conclusion + "\n\n" + result.description() + "\n\n## 支持证据\n\n" + supportingEvidence
                 + "\n## 反对或缺失证据\n\n" + opposingEvidence + "\n## 建议处理\n\n- `"
-                + result.remediationJson() + "`\n\n## 验证建议\n\n- 关闭受控故障后执行一次正常 Order 请求，确认服务恢复且告警 resolved。\n\n"
-                + "## 风险提示\n\n- 本报告只使用固定 Fault Lab 规则，不调用 LLM，不执行自动修复。\n\n## 限制\n\n"
+                + result.remediationJson() + "`\n\n## 验证建议\n\n- 恢复对应依赖或关闭隔离故障后，执行一次隐私安全的正常探测，确认服务恢复且告警 resolved。\n\n"
+                + "## 风险提示\n\n- 本报告只使用版本化固定规则，不调用 LLM，不执行自动修复；Ground Truth 仅用于隔离故障实验评测。\n\n## 限制\n\n"
                 + result.limitations().stream().map(item -> "- " + item).reduce("", (left, right) -> left + right + "\n");
     }
 
@@ -232,7 +233,7 @@ public class Stage3DiagnosisRepository {
             String summary, String rawDataJson, BigDecimal importance, boolean supportsCandidate) {
     }
 
-    public record DiagnosisResult(String candidateName, String description, BigDecimal supportScore,
+    public record DiagnosisResult(String candidateName, String groundTruth, String description, BigDecimal supportScore,
             String verificationStatus, String remediationJson, List<ToolObservation> observations, List<String> limitations) {
         public boolean isSupported() {
             return "SUPPORTED".equals(verificationStatus);

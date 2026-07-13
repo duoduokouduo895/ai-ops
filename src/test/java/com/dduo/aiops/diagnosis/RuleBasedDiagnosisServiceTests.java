@@ -10,10 +10,11 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicReference;
 
+import com.dduo.aiops.diagnosis.Stage3DiagnosisRepository.IncidentContext;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
-import com.dduo.aiops.diagnosis.Stage3DiagnosisRepository.IncidentContext;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -24,6 +25,11 @@ class RuleBasedDiagnosisServiceTests {
 
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final List<String> metricQueries = new ArrayList<>();
+    private final List<String> logQueries = new ArrayList<>();
+    private final List<String> traceQueries = new ArrayList<>();
+    private final AtomicReference<String> metricResponse = new AtomicReference<>(metric("20"));
+    private final AtomicReference<String> logResponse = new AtomicReference<>(logs(1));
+    private final AtomicReference<String> traceResponse = new AtomicReference<>(traces(1));
     private HttpServer server;
     private RuleBasedDiagnosisService service;
 
@@ -31,20 +37,24 @@ class RuleBasedDiagnosisServiceTests {
     void startTelemetryStub() throws IOException {
         server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         server.createContext("/api/v1/query_range", exchange -> {
-            var query = queryParameter(exchange.getRequestURI(), "query");
-            metricQueries.add(query);
-            var value = query.startsWith("faultlab_hikari_holders_active") ? "4" : "1";
-            respond(exchange, "{\"status\":\"success\",\"data\":{\"resultType\":\"matrix\",\"result\":[{\"values\":[[0,\""
-                    + value + "\"]]}]}}");
+            metricQueries.add(queryParameter(exchange.getRequestURI(), "query"));
+            respond(exchange, metricResponse.get());
         });
-        server.createContext("/loki/api/v1/query_range", exchange -> respond(exchange, """
-                {"status":"success","data":{"resultType":"streams","result":[{"values":[["0","fixed event"]]}]}}
-                """));
+        server.createContext("/loki/api/v1/query_range", exchange -> {
+            logQueries.add(queryParameter(exchange.getRequestURI(), "query"));
+            respond(exchange, logResponse.get());
+        });
+        server.createContext("/api/search", exchange -> {
+            traceQueries.add(queryParameter(exchange.getRequestURI(), "q"));
+            respond(exchange, traceResponse.get());
+        });
         server.start();
         var baseUrl = "http://127.0.0.1:" + server.getAddress().getPort();
-        service = new RuleBasedDiagnosisService(objectMapper, new MockEnvironment()
-                .withProperty("aidiag.stage3.prometheus-base-url", baseUrl)
-                .withProperty("aidiag.stage3.loki-base-url", baseUrl));
+        var environment = new MockEnvironment().withProperty("aidiag.stage3.prometheus-base-url", baseUrl)
+                .withProperty("aidiag.stage3.loki-base-url", baseUrl).withProperty("aidiag.stage3.tempo-base-url", baseUrl);
+        service = new RuleBasedDiagnosisService(
+                new DiagnosisRuleRegistry(List.of(new FaultLabDiagnosisRuleProvider(), new AiChatDiagnosisRuleProvider())),
+                new TelemetryEvidenceCollector(objectMapper, environment));
     }
 
     @AfterEach
@@ -53,7 +63,7 @@ class RuleBasedDiagnosisServiceTests {
     }
 
     @Test
-    void supportsEveryWhitelistedFaultWithMetricAndLogEvidence() {
+    void preservesEveryFaultLabRuleAndAddsTraceEvidence() {
         var expectedQueries = List.of(
                 "faultlab_hikari_holders_active{service_name=\"payment-service\"}",
                 "faultlab_thread_pool_saturated{service_name=\"payment-service\"}",
@@ -62,27 +72,117 @@ class RuleBasedDiagnosisServiceTests {
 
         for (var alertName : List.of("FaultLabHikariPoolExhausted", "FaultLabThreadPoolRejected", "FaultLabDownstreamTimeout",
                 "FaultLabDatabaseSlowQuery")) {
-            var result = service.diagnose(incident(alertName));
-
+            var result = service.diagnose(incident("payment-service", alertName));
             assertThat(result.verificationStatus()).isEqualTo("SUPPORTED");
-            assertThat(result.supportScore()).isEqualByComparingTo("55");
-            assertThat(result.observations()).hasSize(2);
+            assertThat(result.supportScore()).isEqualByComparingTo("75");
+            assertThat(result.observations()).extracting(Stage3DiagnosisRepository.ToolObservation::toolName)
+                    .containsExactly("queryServiceMetrics", "queryServiceLogs", "queryServiceTraces");
         }
         assertThat(metricQueries).containsExactlyElementsOf(expectedQueries);
     }
 
     @Test
-    void refusesToQueryTelemetryForUnknownAlerts() {
-        var result = service.diagnose(incident("UnexpectedProductionAlert"));
-
-        assertThat(result.verificationStatus()).isEqualTo("INSUFFICIENT_EVIDENCE");
-        assertThat(result.observations()).isEmpty();
-        assertThat(metricQueries).isEmpty();
+    void registersExactlyTheFourAiChatRuleContracts() {
+        for (var alertName : List.of("AiChatModelTimeout", "AiChatR2dbcPoolExhaustion", "AiChatDocumentBacklog",
+                "AiChatSearchUnavailable")) {
+            var result = service.diagnose(incident("ai-chat-candidate", alertName));
+            assertThat(result.verificationStatus()).isEqualTo("SUPPORTED");
+            assertThat(result.groundTruth()).isNotBlank().isNotEqualTo("UNSPECIFIED");
+        }
+        assertThat(metricQueries).hasSize(4).allMatch(query -> query.contains("ai-chat-candidate"));
+        assertThat(logQueries).hasSize(4).allMatch(query -> query.contains("service_name=\"ai-chat-candidate\""));
+        assertThat(traceQueries).hasSize(4).allMatch(query -> query.contains("resource.service.name = \"ai-chat-candidate\""));
     }
 
-    private static IncidentContext incident(String alertName) {
+    @Test
+    void unknownOrInjectedServiceAndAlertNeverReachTelemetry() {
+        assertThat(service.diagnose(incident("ai-chat-candidate", "UnexpectedProductionAlert")).verificationStatus())
+                .isEqualTo("INSUFFICIENT_EVIDENCE");
+        assertThat(service.diagnose(incident("ai-chat-candidate\"} |= \"secret", "AiChatModelTimeout")).verificationStatus())
+                .isEqualTo("INSUFFICIENT_EVIDENCE");
+        assertThat(service.diagnose(incident("ai-chat-candidate", "AiChatModelTimeout|unwrap secret")).verificationStatus())
+                .isEqualTo("INSUFFICIENT_EVIDENCE");
+        assertThat(metricQueries).isEmpty();
+        assertThat(logQueries).isEmpty();
+        assertThat(traceQueries).isEmpty();
+    }
+
+    @Test
+    void missingMetricOrLogCannotCreateASupportedRootCause() {
+        metricResponse.set(metricResult("[]"));
+        var missingMetric = service.diagnose(incident("ai-chat-candidate", "AiChatModelTimeout"));
+        assertThat(missingMetric.verificationStatus()).isEqualTo("WEAKLY_SUPPORTED");
+        assertThat(missingMetric.isSupported()).isFalse();
+
+        metricResponse.set(metric("20"));
+        logResponse.set(logs(0));
+        var missingLog = service.diagnose(incident("ai-chat-candidate", "AiChatModelTimeout"));
+        assertThat(missingLog.verificationStatus()).isEqualTo("WEAKLY_SUPPORTED");
+        assertThat(missingLog.isSupported()).isFalse();
+    }
+
+    @Test
+    void oversizedTelemetryResponseIsAuditedAsCollectionFailure() {
+        metricResponse.set("x".repeat(TelemetryEvidenceCollector.MAX_RESPONSE_BYTES + 1));
+        var result = service.diagnose(incident("ai-chat-candidate", "AiChatModelTimeout"));
+
+        assertThat(result.verificationStatus()).isEqualTo("WEAKLY_SUPPORTED");
+        assertThat(result.observations().getFirst().status()).isEqualTo("FAILED");
+        assertThat(result.observations().getFirst().evidence()).isNull();
+        assertThat(result.limitations()).anyMatch(item -> item.contains("Prometheus"));
+    }
+
+    @Test
+    void tempoFailureDoesNotBlockMetricAndLogP0Report() {
+        traceResponse.set("x".repeat(TelemetryEvidenceCollector.MAX_RESPONSE_BYTES + 1));
+        var result = service.diagnose(incident("ai-chat-candidate", "AiChatModelTimeout"));
+
+        assertThat(result.verificationStatus()).isEqualTo("SUPPORTED");
+        assertThat(result.supportScore()).isEqualByComparingTo("55");
+        assertThat(result.observations().get(2).status()).isEqualTo("FAILED");
+        assertThat(result.limitations()).anyMatch(item -> item.contains("已降级"));
+    }
+
+    @Test
+    void tempoEvidenceKeepsAtMostFiftyValidCompactTraceSummaries() throws Exception {
+        traceResponse.set(traces(65));
+        var result = service.diagnose(incident("ai-chat-candidate", "AiChatModelTimeout"));
+        var raw = objectMapper.readTree(result.observations().get(2).evidence().rawDataJson());
+
+        assertThat(raw.path("traceCount").asInt()).isEqualTo(50);
+        assertThat(raw.path("traces")).hasSize(50);
+        assertThat(result.observations().get(2).evidence().rawDataJson()).doesNotContain("prompt", "authorization", "cookie");
+    }
+
+    private static IncidentContext incident(String serviceName, String alertName) {
         var now = Instant.now();
-        return new IncidentContext(UUID.randomUUID(), "test", "payment-service", alertName, "WARNING", now.minusSeconds(60), now);
+        return new IncidentContext(UUID.randomUUID(), "test", serviceName, alertName, "WARNING", now.minusSeconds(60), now);
+    }
+
+    private static String metric(String value) {
+        return metricResult("[{\"values\":[[0,\"" + value + "\"]]}]");
+    }
+
+    private static String metricResult(String result) {
+        return "{\"status\":\"success\",\"data\":{\"resultType\":\"matrix\",\"result\":" + result + "}}";
+    }
+
+    private static String logs(int count) {
+        var values = new ArrayList<String>();
+        for (var index = 0; index < count; index++) {
+            values.add("[\"" + index + "\",\"fixed event\"]");
+        }
+        return "{\"status\":\"success\",\"data\":{\"resultType\":\"streams\",\"result\":[{\"values\":["
+                + String.join(",", values) + "]}]}}";
+    }
+
+    private static String traces(int count) {
+        var values = new ArrayList<String>();
+        for (var index = 0; index < count; index++) {
+            values.add("{\"traceID\":\"" + String.format("%032x", index + 1)
+                    + "\",\"rootServiceName\":\"ai-chat-candidate\",\"rootTraceName\":\"POST /chat\",\"durationMs\":12000}");
+        }
+        return "{\"traces\":[" + String.join(",", values) + "]}";
     }
 
     private static void respond(HttpExchange exchange, String payload) throws IOException {

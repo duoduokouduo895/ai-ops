@@ -631,14 +631,16 @@ Smoke 功能使用 `POST /internal/smoke/telemetry`，且只在 `AIDIAG_SMOKE_EN
 
 #### Stage 5.0：部署与私有网络基线（P0）
 
-- [ ] [本地实现] 为 AI-chat backend 增加 `.dockerignore`、Java 17 多阶段 `Dockerfile`、版本锁定、独立 Compose、健康检查、资源上限和 release/rollback 脚本；
-- [ ] [本地验证] 从干净 Git 归档完成 Docker build 和应用测试；镜像中不得包含源码、构建缓存、前端 `node_modules` 或 Secret；
-- [ ] [云端实施] 上传源码归档及 SHA-256，在独立 release 构建 AI-chat；连接现有中间件网络和外部 `aidiag-telemetry`，但不公开 management/OTLP 端口；
+- [x] [本地实现] 为 AI-chat backend 增加 `.dockerignore`、Java 17 多阶段 `Dockerfile`、版本锁定、独立 Compose、健康检查、资源上限和 release/rollback 脚本；
+- [x] [本地验证] 从干净 Git 归档完成 Docker build 和应用测试；镜像中不得包含源码、构建缓存、前端 `node_modules` 或 Secret；
+- [x] [云端实施] 上传源码归档及 SHA-256，在独立 release 构建 AI-chat；连接现有中间件网络和外部 `aidiag-telemetry`，但不公开 management/OTLP 端口；
 - [ ] [安全门禁] 关闭 Nacos 匿名读取或将其收敛到受控网络，生成不回显值的凭据清单，并为每个历史 Secret 定义“新建/切换/验证/撤销/回滚”顺序；
 - [ ] [切换准备] 在 GCP Nginx 预置 `api.dduo.chat`、TLS 和候选 upstream，记录 DNSPod 旧 A 记录、TTL、切换命令与回退条件；
 - [ ] [共同验收] 验证业务健康、依赖连接、容器资源、重启次数、回滚和 AIDiag/AI-chat 互不连带重启。
 
 门禁：AI-chat 正常业务链保持可用；Prometheus/Alloy 能通过私有网络访问目标；公网无法直接访问 management port 和 4318；回滚不丢业务数据。
+
+截至 2026-07-13，前三项已由私有候选 release `20260713-stage5-candidate-8` 完成，候选仅监听 `127.0.0.1:18082`，未修改 DNS/Nginx，且关闭 Flyway、RabbitMQ listener/自动声明、定时任务、ES 同步、Nacos discovery 与模型 warmup。当前只证明“候选容器与依赖连接基线可运行”，不代表安全门禁、公开切换准备或完整业务验收已经通过；证据见 [`docs/verification/2026-07-13-stage5-candidate.md`](docs/verification/2026-07-13-stage5-candidate.md)。
 
 #### Stage 5.1：AI-chat 遥测与隐私收紧（P0）
 

@@ -40,7 +40,9 @@ AI-chat 已完成 V1 发布候选的本地版本迁移、安全收紧和发布�
 - Grafana `/api/health` 返回 HTTP 200 且 database 为 `ok`，运行时内存限制为 1610612736 bytes（1536 MiB）。
 - Prometheus 查询得到 application、Nacos、MySQL、Redis、RabbitMQ、Elasticsearch 共 6 个 `blackbox-ai-chat` 探针，当前值均为 1。
 - Alloy 没有挂载 Docker socket；失败候选写入的受控启动日志已由 Alloy 发送到 Loki，查询 `{service_name="ai-chat-startup",event="ai_chat_startup_failure"}` 返回成功并检索到数据。
-- 发布后发现 Grafana 13 会尝试后台安装建议插件，且缺失空的 `plugins`、`alerting` provisioning 子目录会产生启动错误。后续收紧已禁用预装插件后台安装、版本/插件更新检查和匿名统计，并补齐合法空配置；使用相同固定镜像的隔离容器验证健康通过且 `level=error` 为 0。该收紧需随下一不可变发布归档激活。
+- 发布后发现 Grafana 13 会尝试后台安装建议插件，且缺失空的 `plugins`、`alerting` provisioning 子目录会产生启动错误。后续收紧已禁用预装插件后台安装、版本/插件更新检查和匿名统计，并补齐合法空配置；使用相同固定镜像的隔离容器验证健康通过且 `level=error` 为 0。
+- 收紧归档 `20260713-v1-hardening-2.zip` 的 SHA-256 为 `006f71d1ec550e41ff92d70548223f31706bf03bc1f731a29ae68abbc8359dce`，对应代码提交 `ff09a0d631e76f51c94d0f9ae2ca50043e71b6e9`；云端哈希复核一致并已激活到 `/opt/aidiag/releases/20260713-v1-hardening-2`。
+- 激活后 Grafana 的 Prometheus、Loki、Tempo 数据源健康接口均返回 HTTP 200/`OK`；`ai-chat-break-glass` 仪表盘包含 5 个 panel（`stat`、`timeseries`、`table`、`logs`、`text`），启动日志 `level=error` 为 0，所有 AIDiag 容器重启计数为 0。
 
 ## 对抗性审查
 

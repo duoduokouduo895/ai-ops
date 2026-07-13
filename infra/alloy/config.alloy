@@ -47,6 +47,52 @@ loki.process "aidiag_logs" {
   forward_to = [loki.write.local.receiver]
 }
 
+local.file_match "ai_chat_logs" {
+  path_targets = [
+    {
+      "__path__"     = "/var/log/ai-chat/operations.jsonl",
+      "job"          = "ai-chat",
+      "service_name" = "ai-chat-candidate",
+      "environment"  = sys.env("DEPLOYMENT_ENVIRONMENT"),
+    },
+  ]
+  sync_period = "10s"
+}
+
+loki.source.file "ai_chat_logs" {
+  targets    = local.file_match.ai_chat_logs.targets
+  forward_to = [loki.process.ai_chat_logs.receiver]
+}
+
+loki.process "ai_chat_logs" {
+  stage.json {
+    expressions = {
+      event     = "event",
+      result    = "result",
+      trace_id  = "traceId",
+      span_id   = "spanId",
+      error_type = "errorType",
+    }
+  }
+
+  stage.labels {
+    values = {
+      event  = "",
+      result = "",
+    }
+  }
+
+  stage.structured_metadata {
+    values = {
+      trace_id  = "",
+      span_id   = "",
+      error_type = "",
+    }
+  }
+
+  forward_to = [loki.write.local.receiver]
+}
+
 local.file_match "faultlab_order_logs" {
   path_targets = [
     {

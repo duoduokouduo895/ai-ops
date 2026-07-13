@@ -24,6 +24,13 @@ scrape_configs:
         labels:
           service_name: aidiag
 
+  - job_name: ai-chat-candidate
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: [ai-chat-candidate:9091]
+        labels:
+          service_name: ai-chat-candidate
+
   - job_name: faultlab-order
     metrics_path: /actuator/prometheus
     static_configs:

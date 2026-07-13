@@ -316,6 +316,7 @@ services:
       - alloy_data:/var/lib/alloy
       - aidiag_logs:/var/log/aidiag:ro
       - faultlab_logs:/var/log/faultlab:ro
+      - /opt/ai-chat/logs:/var/log/ai-chat:ro
     networks:
       - telemetry
     depends_on:

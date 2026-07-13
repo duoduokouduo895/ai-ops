@@ -35,8 +35,16 @@ GCP 当前约 15 GiB 内存、无 Swap，且磁盘使用率已经达到 80%，V1
 
    脚本只新增/验证身份和文件 Secret，不重启容器、不修改网络别名。失败后保留同一组受管 Secret，
    可安全重试；如果目录不是由脚本创建则拒绝接管；
-3. 使用新 Compose release 重新创建已验收 Nacos 3 / Elasticsearch 9，使其同时具有候选别名和
-   `nacos-v3` / `elasticsearch-v9` 稳定别名；
+3. 停止 AI-chat 候选后，使用带精确确认门禁和失败回滚的脚本重新创建已验收 Nacos 3 / Elasticsearch 9，
+   使其同时具有候选别名和 `nacos-v3` / `elasticsearch-v9` 稳定别名：
+
+   ```bash
+   AIDIAG_V1_STABLE_ALIASES_CONFIRMED=PROMOTE_VERIFIED_CANDIDATES_TO_STABLE_ALIASES \
+     ./scripts/cloud-promote-v1-stable-aliases.sh /opt/aidiag/releases/<release>
+   ```
+
+   脚本按 Nacos、Elasticsearch 顺序处理，每一步都等待 health、restart 0 和原候选验收脚本通过；
+   任一步失败会使用容器 Compose label 记录的原 release 重新创建已触碰的候选，数据卷不会删除；
 4. 安装 root-owned `production.env`，保持 `AICHAT_PRODUCTION_CONFIRMED=false`，填写唯一
    `AICHAT_CUTOVER_ID`；
 5. 执行 AI-chat `cloud-preflight-production.sh --prepare`。它只读检查，不构建、不启动、不修改 DNS。

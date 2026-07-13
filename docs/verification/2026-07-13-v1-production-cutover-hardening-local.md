@@ -24,6 +24,8 @@
 - release 必须 root-owned、不可被 group/world 写入且不含 symlink；
 - 数据库备份脚本只接受当前 Flyway V4，使用 `--single-transaction` 并在落盘后做 gzip/SHA-256 校验；
 - 生产身份脚本需要精确确认字符串，原子创建文件 Secret，Nacos 与 Elasticsearch 权限均按白名单配置；
+- 稳定别名晋升脚本要求生产身份已存在且 AI-chat 候选已停止，按中间件分步重建、逐步复验；失败时
+  根据当前容器 Compose label 自动恢复原 release，不删除数据库或 volumes；
 - 首次生产失败的日志明确提示需要按手册重启外部旧实例，不再误报“已恢复”。
 
 ## 验证结果
@@ -40,5 +42,8 @@
 
 ## 尚未执行
 
-生产身份创建、稳定别名生效需要短暂重新创建两个候选中间件，属于生产安全配置和维护窗口动作，
+生产身份创建、稳定别名生效需要短暂重新创建两个候选中间件，属于生产安全配置和维护窗口动作；
+晋升脚本目前只完成语法、Compose 渲染、负向门禁及原 release 自动发现验证；云端正确识别 Nacos
+原 release `20260713-nacos3-candidate-gate-r5` 与 Elasticsearch 原 release
+`20260713-elasticsearch9-ik-candidate-r2`，未执行确认分支。
 必须在用户确认后执行。`--ready`、Flyway V5、production 启动、Nginx/TLS、DNS 和外部监控也尚未执行。

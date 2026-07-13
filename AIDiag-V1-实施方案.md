@@ -714,14 +714,16 @@ Smoke 功能使用 `POST /internal/smoke/telemetry`，且只在 `AIDIAG_SMOKE_EN
 - [x] [本地安全] 删除未来可能误开放的匿名 `/api/test/**` seam，扩大运行日志隐私测试，禁止认证详情、用户输入、异常原文、RabbitMQ nack reason 和知识库 ID 列表进入日志；
 - [x] [发布结构] 候选与生产共用受强校验的 Compose 模板，候选强制关闭 Flyway/listener/scheduler 等写任务，生产强制开启并需要维护窗口确认；Nacos 凭据使用文件型 Secret；
 - [x] [Nacos 本地实现] 锁定 Nacos 3.2.2 镜像 digest，完成资源/冲突门禁、完整备份、官方干净 schema、白名单迁移、独立鉴权、最小权限 RBAC、Secret 隔离、验证与保留数据的停止/恢复脚本；
-- [ ] [Nacos 云端验收] 经明确确认后，在独立端口/独立数据库执行上述脚本，验证 9 项配置、服务注册、断线重连、Secret 不入日志和回滚；通过后再单独评审现有 Nacos 2.1.1 的替换方案；
-- [ ] [候选门禁] 发布新版 AI-chat 私有候选，验证配置读取、依赖连接、真实登录、一次受控 SSE Chat、指标/日志/Trace、资源上限和候选回滚；
+- [x] [Nacos 云端基础验收] 在独立端口、数据库、volumes 和 Compose Project 创建 Nacos 3.2.2 候选；配置/历史行数稳定为 `19/10`，9 项必需配置非空，匿名读取 403，候选用户仅具配置读与 naming 读写权限；源 Nacos 2.1.1 保持运行且 restart count 为 0；证据见 [`docs/verification/2026-07-13-nacos3-candidate-cloud.md`](docs/verification/2026-07-13-nacos3-candidate-cloud.md)；
+- [ ] [Nacos 应用验收] 新版 AI-chat 完成启动后再验证服务注册、断线重连和客户端 Secret 不入日志；通过后才单独评审现有 Nacos 2.1.1 的替换方案；
+- [ ] [Elasticsearch 兼容门禁] Boot 4.0.7 / Spring Data Elasticsearch 6.0.6 解析到 9.x client，而当前共享 server 为 8.13.4；实测 `compatible-with=9` 的索引 HEAD 返回 400。不得用关闭 Repository 或本地 fallback 掩盖失败，也不得原地跨主版本覆盖共享集群；经明确确认后创建独立、无共享数据卷的 Elasticsearch 9 候选，再做索引与向量链路验收；
+- [ ] [候选门禁] 新版 AI-chat 已验证 Nacos 配置可读取且 file Secret 可由 uid 10001 读取，但因 Elasticsearch 主版本不兼容健康门禁回滚；完成 ES 隔离候选后继续验证依赖连接、注册、真实登录、一次受控 SSE Chat、指标/日志/Trace、资源上限和候选回滚；
 - [ ] [可观测门禁] 启动早期日志已通过受控文件采集到 Loki；仍需完成主机外 HTTPS/主机可用性检查。Grafana 继续保持 loopback 或经 TLS/鉴权反向代理访问；
 - [ ] [Secret 门禁] 轮换曾经进入聊天记录或 Git 历史的 DeepSeek、Nacos、JWT、数据库、中间件和 OSS 凭据，并逐项验证旧实例回滚策略；
 - [ ] [生产切换] 在维护窗口停止旧实例写任务，执行生产 Flyway/启动/业务验收，预置 Nginx/TLS 后再切换 DNS；失败时按记录恢复旧 upstream/A 记录；
 - [ ] [发布归档] 归档 SBOM、镜像 digest、测试/Compose/健康/业务/遥测证据、已知限制和回滚演练结果，创建 V1 tag 后才对外声明第一版发布。
 
-截至 2026-07-13，V1 的业务闭环已经具备，剩余工作不是继续扩展诊断功能，而是完成 Nacos、Secret、候选与生产切换等发布门禁。在这些门禁通过前可以继续展示现有私有候选和 Grafana，但不能把新版 AI-chat 标记为正式生产发布。
+截至 2026-07-13，V1 的业务闭环已经具备，Nacos 3.2.2 隔离候选的基础门禁已通过。当前关键阻塞是 Elasticsearch 8 server 与 9 client 的主版本不兼容，之后才是应用级 Nacos、Secret、完整候选与生产切换门禁。在这些门禁通过前可以继续展示现有私有候选和 Grafana，但不能把新版 AI-chat 标记为正式生产发布。
 
 总验收：AI-chat 的真实告警可生成引用其真实遥测证据的确定性诊断报告；数据采集不包含 Prompt、回答、用户/会话标识或 Secret；模型失败不影响规则报告；AIDiag 故障不阻断 AI-chat 主业务；部署和回滚均不要求手工上传 Jar。
 
@@ -742,7 +744,7 @@ Smoke 功能使用 `POST /internal/smoke/telemetry`，且只在 `AIDIAG_SMOKE_EN
 - [x] 完成 AI-chat 独立 Docker 构建、私有 telemetry 网络和回滚基线；
 - [x] 完成 AI-chat 遥测隐私审查后再允许 Loki/Tempo 采集；
 - [x] 完成四类 AI-chat 规则、隔离故障验收和 Stage 5.4 独立故障入口；Admin 运维页只作为辅助入口，不与 AI-chat 共用救援职责。
-- [ ] 完成 Stage 5.5 的 Nacos 3、Secret 轮换、新版候选、主机外监控和生产切换门禁后发布 V1。
+- [ ] 完成 Stage 5.5 的 Elasticsearch 9 隔离候选、Nacos 应用验收、Secret 轮换、新版候选、主机外监控和生产切换门禁后发布 V1。
 
 ---
 

@@ -140,6 +140,10 @@ namespace_conflicts="$(mysql_root -e "SELECT COUNT(*) FROM \`${source_db}\`.conf
 (( namespace_conflicts == 0 )) \
   || { echo "Source Nacos contains empty/public namespace conflicts; automatic migration is unsafe" >&2; exit 72; }
 
+if grep -q $'\r' "${versions_file}"; then
+  echo "versions.env must use LF line endings before running on Linux" >&2
+  exit 66
+fi
 set -a
 # shellcheck disable=SC1090
 source "${versions_file}"

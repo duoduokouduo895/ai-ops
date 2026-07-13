@@ -87,6 +87,9 @@ info:
     version: "@project.version@"
 
 aidiag:
+  read-api:
+    username: ${AIDIAG_READ_API_USERNAME:aidiag-reader}
+    password: ${AIDIAG_READ_API_PASSWORD:${aidiag.read-api.secret:}}
   smoke:
     enabled: ${AIDIAG_SMOKE_ENABLED:false}
   alerts:

@@ -42,6 +42,7 @@ services:
       AIDIAG_OPENAPI_ENABLED: "false"
       AIDIAG_SMOKE_ENABLED: ${AIDIAG_SMOKE_ENABLED:-false}
       AIDIAG_ALERT_WEBHOOK_USERNAME: ${ALERTMANAGER_WEBHOOK_USERNAME}
+      AIDIAG_READ_API_USERNAME: ${AIDIAG_READ_API_USERNAME:-aidiag-reader}
       AIDIAG_WORKER_ENABLED: ${AIDIAG_WORKER_ENABLED:-true}
       AIDIAG_WORKER_POLL_DELAY_MS: ${AIDIAG_WORKER_POLL_DELAY_MS:-1000}
       AIDIAG_WORKER_LEASE_SECONDS: ${AIDIAG_WORKER_LEASE_SECONDS:-30}
@@ -73,6 +74,8 @@ services:
         target: aidiag.db.password
       - source: aidiag_alertmanager_webhook_password
         target: aidiag.alerts.webhook.password
+      - source: aidiag_read_api_secret
+        target: aidiag.read-api.secret
     volumes:
       - aidiag_logs:/var/log/aidiag
     ports:
@@ -478,6 +481,8 @@ secrets:
     file: ${AIDIAG_SECRETS_DIR:-./.secrets}/alertmanager_webhook_password
   aidiag_alertmanager_webhook_password:
     file: ${AIDIAG_SECRETS_DIR:-./.secrets}/aidiag_alertmanager_webhook_password
+  aidiag_read_api_secret:
+    file: ${AIDIAG_SECRETS_DIR:-./.secrets}/aidiag_read_api_secret
   grafana_admin_password:
     file: ${AIDIAG_SECRETS_DIR:-./.secrets}/grafana_admin_password
   faultlab_db_password:

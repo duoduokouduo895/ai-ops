@@ -8,6 +8,7 @@ Create these files only on the cloud server before the first deployment:
 - grafana_admin_password
 - aidiag_deepseek_api_key
 - aidiag_stage4_operator_secret
+- aidiag_read_api_secret
 - faultlab_db_password
 - faultlab_control_token
 - aichat_stage5_fault_token
@@ -29,3 +30,7 @@ Stage 5.3 requires a separate `aichat_stage5_fault_token`. It is mounted only
 into the profiled `ai-chat-stage5-lab` container as `aichat.stage5.fault.token`.
 Use at least 32 random bytes, owner `root`, group `10001`, mode `640`. Do not
 reuse the Stage 1 Fault Lab token or any AI-chat application credential.
+
+Stage 5.4 uses `aidiag_read_api_secret` only for server-to-server read requests from
+the AI-chat ADMIN BFF. Mount it into both containers as a read-only file with owner
+`root`, group `10001`, mode `640`. Do not expose it to either frontend build.

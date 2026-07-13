@@ -48,14 +48,14 @@ mv -Tf "${next_link}" "${current_link}"
 set_compose_files "${current_link}"
 current_compose=(docker compose --project-directory "${current_link}" "${compose_files[@]}" \
   --env-file "${current_link}/versions.env" --env-file "${runtime_dir}/.env.cloud")
-"${current_compose[@]}" down --remove-orphans
-if ! "${current_compose[@]}" up -d; then
+if ! "${current_compose[@]}" up -d --remove-orphans --wait --wait-timeout 180; then
   if [[ -n "${previous_release}" ]]; then
     ln -s "${previous_release}" "${next_link}"
     mv -Tf "${next_link}" "${current_link}"
     set_compose_files "${current_link}"
     docker compose --project-directory "${current_link}" "${compose_files[@]}" \
-      --env-file "${current_link}/versions.env" --env-file "${runtime_dir}/.env.cloud" up -d || true
+      --env-file "${current_link}/versions.env" --env-file "${runtime_dir}/.env.cloud" \
+      up -d --remove-orphans --wait --wait-timeout 180 || true
   fi
   echo "Activation failed; current link was restored when a previous release existed." >&2
   exit 1

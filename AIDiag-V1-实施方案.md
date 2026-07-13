@@ -1,6 +1,6 @@
 # AIDiag V1 实施方案
 
-> 文档版本：V1.4（Stage 5 AI-chat 接入收紧）
+> 文档版本：V1.5（Stage 5.3 隔离验收归档）
 > 更新日期：2026-07-13
 > 定位：面向 Java 微服务的只读智能诊断层。第一批真实接入目标为 AI-chat，并以受控 Fault Lab 完成故障评测。
 
@@ -668,11 +668,15 @@ Smoke 功能使用 `POST /internal/smoke/telemetry`，且只在 `AIDIAG_SMOKE_EN
 
 #### Stage 5.3：隔离故障实验与端到端验收（P0）
 
-- [ ] [本地实现] 提供只在隔离 test profile 启用、需要独立 Secret 的故障开关和清理脚本；禁止在真实用户实例直接注入数据库、中间件或 Provider 故障；
-- [ ] [共同验收] 对四类 AI-chat 故障分别完成 firing、Incident、证据、确定性报告、恢复和 resolved；每类先做 5 次冒烟，再决定是否扩展正式样本；
-- [ ] [共同验收] 手动触发一次 Stage 4 DeepSeek 建议，确认 advice 引用既有 evidenceId、每日配额增加一次、`automatedRemediation=false` 且不改写确定性报告；
-- [ ] [结果归档] 记录无故障对照、失败样本、告警到建单耗时、告警到报告耗时、证据完整性、弃权结果和实际模型费用；未测量前不得声称准确率；
-- [ ] [展示门禁] 先交付 AI-chat Grafana Dashboard；只有端到端闭环通过后，另立前端子阶段扩展现有 `frontend_admin`，不在 Stage 5 P0 内新建第三套前端。
+- [x] [本地实现] 提供只在隔离 `stage5-test` profile 启用、需要独立 Secret 的故障开关和清理脚本；禁止在真实用户实例直接注入数据库、中间件或 Provider 故障；
+- [x] [共同验收] 对四类 AI-chat contract 场景分别完成 firing、Incident、证据、确定性报告、恢复和 resolved；每类完成 5 次生命周期冒烟；
+- [x] [共同验收] 手动触发一次 Stage 4 DeepSeek 建议，确认 advice 引用既有 evidenceId、每日配额增加一次、`automatedRemediation=false` 且不改写确定性报告；
+- [x] [结果归档] 记录短时无故障基线、失败样本、告警到建单耗时、告警到报告耗时、证据完整性和模型调用计数；实际货币费用无法从当前 API 响应取得，明确保留为未测量项；
+- [x] [展示门禁] AI-chat Grafana Dashboard 已交付；端到端闭环通过后可另立前端子阶段扩展现有 `frontend_admin`，不在 Stage 5 P0 内新建第三套前端。
+
+截至 2026-07-13，隔离服务 `ai-chat-stage5-lab` 已完成 4 类场景 × 5 轮，共 20 个 Incident；20/20 自动建单、生成 `SUPPORTED` 确定性报告并恢复为 `RESOLVED`。每份报告均引用 1 条 Metric、1 条 Log 和 1 条 Trace，告警到建单为 10.006～10.160 秒，告警到报告为 40.210～44.468 秒。Stage 4 预览只增加 1 次预算计数，引用 3 条 evidence，未执行自动修复，也未改写确定性报告。动态检查 92 条实验日志未发现 Prompt、用户/会话标识、Secret 或查询正文。
+
+该结果是**隔离遥测契约闭环验证**，不是生产准确率：实验服务没有真的耗尽 AI-chat R2DBC 连接池，也没有中断真实 Elasticsearch、RabbitMQ 或模型 Provider；同一轮的证据时间窗存在重叠，5 轮只能证明生命周期可重复。下一阶段必须采用 shadow mode 收集非重叠真实样本，统计误报、漏报、弃权和恢复时延后，才能讨论生产准确率。详细证据见 [`docs/verification/2026-07-13-stage5-3.md`](docs/verification/2026-07-13-stage5-3.md)。
 
 总验收：AI-chat 的真实告警可生成引用其真实遥测证据的确定性诊断报告；数据采集不包含 Prompt、回答、用户/会话标识或 Secret；模型失败不影响规则报告；AIDiag 故障不阻断 AI-chat 主业务；部署和回滚均不要求手工上传 Jar。
 
@@ -692,7 +696,7 @@ Smoke 功能使用 `POST /internal/smoke/telemetry`，且只在 `AIDIAG_SMOKE_EN
 - [x] 完成阶段 0 验收；可进入最小 Fault Lab 的业务服务实现。
 - [x] 完成 AI-chat 独立 Docker 构建、私有 telemetry 网络和回滚基线；
 - [x] 完成 AI-chat 遥测隐私审查后再允许 Loki/Tempo 采集；
-- [ ] 完成四类 AI-chat 规则和隔离故障验收后再启动自研运维前端。
+- [x] 完成四类 AI-chat 规则和隔离故障验收；自研运维前端另立 Stage 5.4 子阶段，启动前先补 Incident API 鉴权与 shadow 数据质量门禁。
 
 ---
 

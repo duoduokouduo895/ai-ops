@@ -4,7 +4,7 @@ AIDiag 是一个面向 Java 服务的证据驱动型异常诊断平台。它接�
 
 平台当前重点接入 **AI-chat**：通过私有遥测网络监控候选实例，不侵入 AI-chat 业务代码，也不会把 Prompt、回答、用户 ID、会话 ID 或 Secret 写入运维遥测。
 
-> 当前状态：Stage 0～4 已完成；Stage 5.1 遥测与隐私验收、Stage 5.2 诊断规则与私有云端发布已完成。Stage 5.3 隔离故障实验和四类真实诊断准确率验收尚未执行，因此当前版本不应被描述为已完成生产级自动诊断。
+> 当前状态：Stage 0～4、Stage 5.1～5.3 已完成。Stage 5.3 在独立 contract lab 中完成 4 类场景 × 5 轮闭环；这证明遥测契约和诊断流程可重复运行，不等同于真实 AI-chat 依赖故障的生产准确率。
 
 ## 核心能力
 
@@ -62,7 +62,7 @@ AI-chat 与 AIDiag 只通过遥测协议和告警协议连接。AIDiag 故障不
 | Stage 4 | 已完成 | DeepSeek 人工触发建议、配额、审计与输出约束 |
 | Stage 5.1 | 已完成 | AI-chat 指标、Trace、脱敏日志和隐私测试 |
 | Stage 5.2 | 已完成发布 | 四类 AI-chat 规则、Dashboard、自动建单传输验收 |
-| Stage 5.3 | 待实施 | 隔离故障注入、四类真实证据闭环、恢复和评测 |
+| Stage 5.3 | 已完成 | 隔离 contract lab、四类证据闭环、恢复、DeepSeek 联动与评测归档 |
 
 完整范围、门禁和遗留风险请阅读 [`AIDiag-V1-实施方案.md`](./AIDiag-V1-实施方案.md)。云端人工操作与回滚说明位于 [`云端实施操作手册.md`](./云端实施操作手册.md)。
 
@@ -100,7 +100,7 @@ Windows PowerShell：
 - 文档 outbox 积压；
 - Elasticsearch / RAG 搜索不可用。
 
-这些规则使用固定查询和明确的 Ground Truth。Trace 只作为辅助证据；Tempo 不可用时不能阻断 Metric/Log 基线。Stage 5.3 完成前，仓库不声明这些规则具有经过测量的准确率。
+这些规则使用固定查询和明确的实验 Ground Truth。Trace 只作为辅助证据；Tempo 不可用时不能阻断 Metric/Log 基线。Stage 5.3 已证明隔离契约场景 20/20 可完成闭环，但样本窗口重叠且不是实际 MySQL、RabbitMQ、Elasticsearch 或模型 Provider 故障，因此仓库仍不声明生产准确率。
 
 ## 安全边界
 
@@ -113,7 +113,7 @@ Windows PowerShell：
 
 ## 下一步
 
-下一阶段是 Stage 5.3：为 AI-chat 创建完全隔离的测试 profile 和故障控制凭据，对四类场景分别完成告警 firing、自动建单、真实证据、确定性报告、恢复、resolved 和结果归档。完成端到端闭环后，再评估是否扩展现有管理端形成自研运维前端。
+下一阶段是 Stage 5.4：先以只读 shadow mode 观察真实 AI-chat 告警和证据质量，补充非重叠样本、误报率和弃权率，再决定是否在现有 `frontend_admin` 中增加运维页面。正式切流前仍需完成 Nacos/Secret 收紧、Incident API 鉴权和 DNS/Nginx 变更评审。
 
 ## License
 

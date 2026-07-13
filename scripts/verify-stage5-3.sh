@@ -85,6 +85,12 @@ incident_resolved() {
   [[ "$(db_scalar "SELECT status FROM incident WHERE id='$incident'")" == RESOLVED ]]
 }
 
+report_hash() {
+  local incident="$1"
+  db_scalar "SELECT report_json::text FROM diagnosis_report WHERE incident_id='$incident' ORDER BY generated_at DESC LIMIT 1" \
+    | sha256sum | awk '{print $1}'
+}
+
 lab_scrape_is_up() {
   compose exec -T prometheus wget -qO- \
     'http://localhost:9090/api/v1/query?query=up%7Bjob%3D%22ai-chat-stage5-lab%22%7D' 2>/dev/null \
@@ -141,7 +147,7 @@ for cycle in $(seq 1 5); do
 done
 
 [[ -n "$last_incident" ]] || fail 'no supported report was produced'
-report_hash_before="$(db_scalar "SELECT encode(digest(report_json::text,'sha256'),'hex') FROM diagnosis_report WHERE incident_id='$last_incident' ORDER BY generated_at DESC LIMIT 1")"
+report_hash_before="$(report_hash "$last_incident")"
 budget_before="$(db_scalar "SELECT COALESCE((SELECT request_count FROM ai_model_daily_budget WHERE usage_date=(CURRENT_TIMESTAMP AT TIME ZONE 'UTC')::date),0)")"
 preview="$(compose exec -T aidiag-backend sh -ec '
   username="${AIDIAG_STAGE4_OPERATOR_USERNAME:-aidiag-operator}"
@@ -158,7 +164,7 @@ assert d.get("advice") and d["advice"].get("evidenceIds"), d
 print("stage4_preview=COMPLETED automatedRemediation=false evidenceRefs=%d" % len(d["advice"]["evidenceIds"]))
 '
 budget_after="$(db_scalar "SELECT request_count FROM ai_model_daily_budget WHERE usage_date=(CURRENT_TIMESTAMP AT TIME ZONE 'UTC')::date")"
-report_hash_after="$(db_scalar "SELECT encode(digest(report_json::text,'sha256'),'hex') FROM diagnosis_report WHERE incident_id='$last_incident' ORDER BY generated_at DESC LIMIT 1")"
+report_hash_after="$(report_hash "$last_incident")"
 [[ "$budget_after" -eq $((budget_before + 1)) ]] || fail 'Stage 4 daily budget did not increase exactly once'
 [[ "$report_hash_before" == "$report_hash_after" ]] || fail 'Stage 4 changed the deterministic report'
 

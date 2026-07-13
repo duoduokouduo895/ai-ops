@@ -391,6 +391,12 @@ AI-chat 通过遥测协议接入，不依赖 AIDiag 的业务代码。V1 发布�
 
 2026-07-13 的私有候选已进一步证明该门禁必要：新版客户端连接现有 2.1.1 时把 9 个已有 Data ID 判定为空，而服务端 HTTP API 对同一 Data ID 均返回 200 和非空正文。候选因此缺少 R2DBC 配置并 fail closed，激活脚本恢复旧候选。后续不允许通过本地默认凭据或把 Nacos import 改为 optional 来绕过；必须改用隔离 Nacos 3 候选验证。
 
+截至 2026-07-13，隔离基线改为当前稳定版 Nacos Server 3.2.2，并固定 `v3.2.2` 镜像 digest。官方最低内存要求为 2 GiB；本项目为候选设置 2560 MiB 容器上限、1 GiB heap 和至少 3 GiB 宿主机 `MemAvailable` 前置门禁，避免在无 swap 的主机上与现有中间件争抢到 OOM。3.2 的主服务不再兼容 Nacos 1.x/2.x HTTP OpenAPI，因此正式替换前必须清点旧脚本与非 SDK 调用；当前只让 Nacos Client 3.1.1 连接隔离候选，不对现有服务做原地升级。
+
+数据库迁移采用“完整逻辑备份 + 官方 3.2.2 干净 schema + 白名单数据复制”，而不是复制旧 schema 后执行不透明的增量修改。只迁移 `config_info`、`config_tags_relation`、`group_capacity`、`his_config_info`、`tenant_capacity`、`tenant_info`；旧 `users`、`roles`、`permissions` 一律排除并重新初始化。`config_info_aggr`、`config_info_beta`、`config_info_tag` 已被 3.2 schema 移除，只要源表非空就 fail closed，禁止静默丢数。当前只读审计得到 19 条配置、10 条历史记录、空 namespace 无 `public` 冲突，数据库约 0.44 MiB；这些结果将在执行时再次校验，不能把本次快照当成永久前提。
+
+候选鉴权启用后创建独立管理员与 `aichat-candidate` 用户。AI-chat 用户只授予 `public:DEFAULT_GROUP:config/*` 读权限和 `public:DEFAULT_GROUP:naming/*` 读写权限；候选与生产分别使用 `/opt/ai-chat/runtime/.secrets/candidate` 和 `/opt/ai-chat/runtime/.secrets/production`，避免凭据轮换破坏另一条回滚链。候选 8848/9848 只绑定 loopback，同时通过私有 Docker 网络供 AI-chat 访问。本地实现与静态验证证据见 [`docs/verification/2026-07-13-nacos3-candidate-hardening-local.md`](docs/verification/2026-07-13-nacos3-candidate-hardening-local.md)。
+
 ### 9.1 部署与私有网络
 
 V1 推荐把 AI-chat backend 以独立 Compose Project 部署到现有 GCP Docker 主机，并加入 AIDiag 已创建的外部网络 `aidiag-telemetry`。AI-chat 业务入口继续由既有反向代理提供，管理端口、`/actuator/prometheus` 和 Alloy OTLP 4318 不映射到公网。
@@ -705,7 +711,8 @@ Smoke 功能使用 `POST /internal/smoke/telemetry`，且只在 `AIDIAG_SMOKE_EN
 - [x] [本地兼容性] AI-chat 统一 Java 21 编译/构建/运行时，升级到 Boot 4.0.7、Cloud 2025.1.2、Alibaba 2025.1.0.0、Nacos Client 3.1.1 和 LangChain4j 1.15.1；完成 159 项回归和可执行 Jar 构建；
 - [x] [本地安全] 删除未来可能误开放的匿名 `/api/test/**` seam，扩大运行日志隐私测试，禁止认证详情、用户输入、异常原文、RabbitMQ nack reason 和知识库 ID 列表进入日志；
 - [x] [发布结构] 候选与生产共用受强校验的 Compose 模板，候选强制关闭 Flyway/listener/scheduler 等写任务，生产强制开启并需要维护窗口确认；Nacos 凭据使用文件型 Secret；
-- [ ] [Nacos 门禁] 备份现有 Nacos 数据库和配置摘要，在独立端口/独立数据库验证 Nacos 3.2.1；通过后再单独评审现有 Nacos 升级、鉴权和回滚；
+- [x] [Nacos 本地实现] 锁定 Nacos 3.2.2 镜像 digest，完成资源/冲突门禁、完整备份、官方干净 schema、白名单迁移、独立鉴权、最小权限 RBAC、Secret 隔离、验证与保留数据的停止/恢复脚本；
+- [ ] [Nacos 云端验收] 经明确确认后，在独立端口/独立数据库执行上述脚本，验证 9 项配置、服务注册、断线重连、Secret 不入日志和回滚；通过后再单独评审现有 Nacos 2.1.1 的替换方案；
 - [ ] [候选门禁] 发布新版 AI-chat 私有候选，验证配置读取、依赖连接、真实登录、一次受控 SSE Chat、指标/日志/Trace、资源上限和候选回滚；
 - [ ] [可观测门禁] 启动早期日志已通过受控文件采集到 Loki；仍需完成主机外 HTTPS/主机可用性检查。Grafana 继续保持 loopback 或经 TLS/鉴权反向代理访问；
 - [ ] [Secret 门禁] 轮换曾经进入聊天记录或 Git 历史的 DeepSeek、Nacos、JWT、数据库、中间件和 OSS 凭据，并逐项验证旧实例回滚策略；
@@ -749,7 +756,7 @@ Smoke 功能使用 `POST /internal/smoke/telemetry`，且只在 `AIDIAG_SMOKE_EN
 
 - [Spring Boot 系统要求](https://docs.spring.io/spring-boot/system-requirements.html) 与 [Spring Boot 4.1.0](https://github.com/spring-projects/spring-boot/releases/tag/v4.1.0)；
 - [Spring Cloud 版本兼容矩阵](https://spring.io/projects/spring-cloud/)、[Spring Cloud Alibaba 2025.1.0.0](https://github.com/alibaba/spring-cloud-alibaba/releases/tag/2025.1.0.0) 与 [LangChain4j 1.15.1](https://github.com/langchain4j/langchain4j/releases/tag/1.15.1)；
-- [Nacos 3.2.1](https://github.com/alibaba/nacos/releases/tag/3.2.1) 与 [Nacos 3 升级说明](https://nacos.io/en/docs/v3.0/manual/admin/upgrading/)；
+- [Nacos 3.2.2](https://github.com/alibaba/nacos/releases/tag/3.2.2)、[Nacos 3.2 发布历史](https://nacos.io/en/download/release-history/) 与 [Nacos 3 升级说明](https://nacos.io/en/docs/latest/manual/admin/upgrading/)；
 - [Spring AI 2.0 与 Boot 兼容说明](https://docs.spring.io/spring-ai/reference/getting-started.html)；
 - [Promtail EOL 与 Alloy 迁移说明](https://grafana.com/docs/loki/latest/send-data/promtail/)；
 - [OpenTelemetry Java Agent 2.29.0](https://github.com/open-telemetry/opentelemetry-java-instrumentation/releases/tag/v2.29.0)；

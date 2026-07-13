@@ -48,6 +48,7 @@ AI-chat 与 AIDiag 只通过遥测协议和告警协议连接。AIDiag 故障不
 | 日志与 Trace | Grafana Alloy 1.17.1、Loki 3.7.3、Tempo 3.0.2、OpenTelemetry Java Agent 2.29.0 |
 | 可视化 | Grafana 13.1.0 |
 | AI-chat 发布候选 | Java 21、Spring Boot 4.0.7、Spring Cloud 2025.1.2、Spring Cloud Alibaba 2025.1.0.0、Nacos Client 3.1.1、LangChain4j 1.15.1 |
+| Nacos 隔离候选 | Nacos Server 3.2.2（tag + digest 双锁定）、独立 MySQL schema、鉴权与最小权限 RBAC |
 
 基础设施镜像在 [`versions.env`](./versions.env) 中同时锁定版本和 digest，避免仅使用浮动 tag。
 
@@ -115,7 +116,7 @@ Windows PowerShell：
 
 ## 下一步
 
-下一步先在不切换 DNS 的前提下建立隔离 Nacos 3 候选并发布新版 AI-chat 私有候选，完成配置读取、鉴权、真实登录、SSE、遥测与回滚验收；启动早期失败日志已接入 Loki，仍需补宿主机外部可用性监控。随后在维护窗口逐项轮换 Secret、停止旧写任务、预置 Nginx/TLS 并完成生产切换。shadow mode 的非重叠真实样本继续收集，但不阻塞个人展示版 V1；它只阻止我们宣称生产诊断准确率。
+隔离 Nacos 3.2.2 的 Compose、备份/迁移、鉴权、验证、停止与恢复脚本已经完成本地收紧，下一步在一次明确确认后执行云端候选创建；该操作不会替换现有 Nacos 2.1.1，也不会修改 DNS。通过后再发布新版 AI-chat 私有候选，完成配置读取、注册、真实登录、SSE、遥测与回滚验收；启动早期失败日志已接入 Loki，仍需补宿主机外部可用性监控。随后在维护窗口逐项轮换 Secret、停止旧写任务、预置 Nginx/TLS 并完成生产切换。shadow mode 的非重叠真实样本继续收集，但不阻塞个人展示版 V1；它只阻止我们宣称生产诊断准确率。
 
 ## License
 

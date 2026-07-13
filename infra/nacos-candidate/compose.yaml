@@ -1,0 +1,100 @@
+services:
+  nacos3-candidate:
+    image: ${NACOS3_CANDIDATE_IMAGE:?Load the pinned Nacos 3 candidate image from versions.env}
+    container_name: nacos-v3-candidate
+    restart: unless-stopped
+    entrypoint:
+      - /bin/bash
+      - /opt/aidiag/nacos-candidate-entrypoint.sh
+    environment:
+      MODE: standalone
+      PREFER_HOST_MODE: hostname
+      NACOS_DEPLOYMENT_TYPE: merged
+      NACOS_APPLICATION_PORT: "8848"
+      SPRING_DATASOURCE_PLATFORM: mysql
+      MYSQL_SERVICE_HOST: mysql
+      MYSQL_SERVICE_PORT: "3306"
+      MYSQL_SERVICE_DB_NAME: ${NACOS3_DB_NAME:?Set the isolated candidate database name}
+      MYSQL_SERVICE_USER: ${NACOS3_DB_USER:?Set the isolated candidate database user}
+      MYSQL_SERVICE_DB_PARAM: characterEncoding=utf8&connectTimeout=3000&socketTimeout=10000&autoReconnect=true&useUnicode=true&useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true
+      NACOS_AUTH_ENABLE: "true"
+      NACOS_AUTH_ADMIN_ENABLE: "true"
+      NACOS_AUTH_CONSOLE_ENABLE: "true"
+      NACOS_AUTH_SYSTEM_TYPE: nacos
+      NACOS_AUTH_CACHE_ENABLE: "false"
+      NACOS_AUTH_USER_AGENT_AUTH_WHITE_ENABLE: "false"
+      NACOS_CONSOLE_UI_ENABLED: "false"
+      TOMCAT_ACCESSLOG_ENABLED: "false"
+      JVM_XMS: 512m
+      JVM_XMX: 1024m
+      JVM_XMN: 256m
+      JVM_MS: 128m
+      JVM_MMS: 320m
+      TIME_ZONE: Asia/Shanghai
+    secrets:
+      - source: mysql_password
+        target: mysql.password
+      - source: auth_token
+        target: nacos.auth-token
+      - source: identity_key
+        target: nacos.identity-key
+      - source: identity_value
+        target: nacos.identity-value
+    volumes:
+      - ./entrypoint.sh:/opt/aidiag/nacos-candidate-entrypoint.sh:ro
+      - nacos3_candidate_logs:/home/nacos/logs
+      - nacos3_candidate_data:/home/nacos/data
+    ports:
+      - "127.0.0.1:${NACOS3_HTTP_PORT:-18848}:8848"
+      - "127.0.0.1:${NACOS3_GRPC_PORT:-19848}:9848"
+    networks:
+      middleware: {}
+      nacos:
+        aliases:
+          - nacos-v3-candidate
+    healthcheck:
+      test: ["CMD-SHELL", "curl --fail --silent --max-time 3 http://127.0.0.1:8848/nacos/v3/admin/core/state/readiness >/dev/null"]
+      interval: 10s
+      timeout: 3s
+      retries: 18
+      start_period: 120s
+    read_only: true
+    tmpfs:
+      - /tmp:size=128m,mode=1777
+    mem_limit: 2560m
+    cpus: 1.50
+    pids_limit: 512
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    stop_grace_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: 20m
+        max-file: "3"
+
+networks:
+  middleware:
+    external: true
+    name: middleware-net
+  nacos:
+    external: true
+    name: nacos-net
+
+volumes:
+  nacos3_candidate_logs:
+    name: nacos3-candidate-logs
+  nacos3_candidate_data:
+    name: nacos3-candidate-data
+
+secrets:
+  mysql_password:
+    file: ${NACOS3_SECRETS_DIR:?Set the Nacos 3 candidate secrets directory}/mysql_password
+  auth_token:
+    file: ${NACOS3_SECRETS_DIR:?Set the Nacos 3 candidate secrets directory}/auth_token
+  identity_key:
+    file: ${NACOS3_SECRETS_DIR:?Set the Nacos 3 candidate secrets directory}/identity_key
+  identity_value:
+    file: ${NACOS3_SECRETS_DIR:?Set the Nacos 3 candidate secrets directory}/identity_value

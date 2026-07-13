@@ -49,3 +49,8 @@ NACOS3_RESUME_CONFIRMED=RESUME_ISOLATED_NACOS3 \
 ```
 
 停止只影响 `nacos-v3-candidate`。当前 `nacos` 2.1.1、AI-chat 旧候选、Nginx 与 DNS 均保持不变。
+
+V1 生产不会把 `nacos` 旧别名改指向 3.x。维护窗口内使用本文件重新创建已验收候选后，
+同一容器会额外获得 `nacos-v3` 稳定别名；候选仍使用 `nacos-v3-candidate`。这样生产和候选可以使用
+不同身份，同时旧 Nacos 2.1.1 回滚链不会被覆盖。重新创建会造成 Nacos 3 候选短暂不可用，
+必须在 AI-chat 候选停止后进行。

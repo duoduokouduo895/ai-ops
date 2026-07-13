@@ -744,7 +744,7 @@ Smoke 功能使用 `POST /internal/smoke/telemetry`，且只在 `AIDIAG_SMOKE_EN
 - [x] 完成 AI-chat 独立 Docker 构建、私有 telemetry 网络和回滚基线；
 - [x] 完成 AI-chat 遥测隐私审查后再允许 Loki/Tempo 采集；
 - [x] 完成四类 AI-chat 规则、隔离故障验收和 Stage 5.4 独立故障入口；Admin 运维页只作为辅助入口，不与 AI-chat 共用救援职责。
-- [ ] 完成 Stage 5.5 剩余的 Secret 轮换、主机外监控、生产切换与发布归档门禁后发布 V1；Elasticsearch 9 + IK、Nacos 应用验收和新版私有候选已完成。
+- [ ] 完成 Stage 5.5 剩余的 Secret 轮换、主机外监控、生产切换与发布归档门禁后发布 V1；Elasticsearch 9 + IK、Nacos 应用验收和新版私有候选已完成，生产步骤已固化到 [`docs/release/V1-production-cutover-runbook.md`](docs/release/V1-production-cutover-runbook.md)。
 
 ---
 

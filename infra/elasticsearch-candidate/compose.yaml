@@ -35,6 +35,8 @@ services:
       middleware:
         aliases:
           - elasticsearch-v9-candidate
+          # Stable V1 production alias. The old `elasticsearch` alias remains on 8.13.4.
+          - elasticsearch-v9
     healthcheck:
       test:
         - CMD-SHELL

@@ -37,3 +37,8 @@ ELASTICSEARCH9_STOP_CONFIRMED=STOP_ISOLATED_ELASTICSEARCH9 \
 ELASTICSEARCH9_START_CONFIRMED=START_ISOLATED_ELASTICSEARCH9 \
   ./scripts/cloud-start-elasticsearch9-candidate.sh /opt/aidiag/releases/<release>
 ```
+
+V1 生产不替换现有 `elasticsearch` 8.13.4 别名。维护窗口内用本 Compose 重新创建已验收的
+Elasticsearch 9.3.2 + IK 容器后，它会额外获得 `elasticsearch-v9` 稳定别名；候选继续使用
+`elasticsearch-v9-candidate`。生产与候选必须使用不同的 least-privilege 用户，禁止复制同一组 Secret。
+重新创建期间 Elasticsearch 9 候选会短暂不可用，因此应先停止 AI-chat 候选。

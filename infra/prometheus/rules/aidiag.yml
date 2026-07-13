@@ -112,3 +112,39 @@ groups:
         annotations:
           summary: AI-chat knowledge search is repeatedly failing
           description: At least three candidate search operations failed in five minutes; correlate with the fixed Elasticsearch operation event.
+
+  # Stage 5.3 lifecycle is driven only by authenticated state in the isolated
+  # contract lab. Diagnosis still evaluates production-compatible telemetry.
+  - name: ai-chat-stage5-lab
+    rules:
+      - alert: AiChatModelTimeout
+        expr: aichat_stage5_fault_active{service_name="ai-chat-stage5-lab",fault="model-timeout"} == 1
+        for: 15s
+        labels: {severity: warning, service_name: ai-chat-stage5-lab}
+        annotations:
+          summary: Isolated AI-chat model timeout contract is active
+          description: Stage 5.3 authenticated contract state; never a production health signal.
+
+      - alert: AiChatR2dbcPoolExhaustion
+        expr: aichat_stage5_fault_active{service_name="ai-chat-stage5-lab",fault="r2dbc-pool-exhaustion"} == 1
+        for: 15s
+        labels: {severity: warning, service_name: ai-chat-stage5-lab}
+        annotations:
+          summary: Isolated AI-chat R2DBC pool contract is active
+          description: Stage 5.3 authenticated contract state; never a production health signal.
+
+      - alert: AiChatDocumentBacklog
+        expr: aichat_stage5_fault_active{service_name="ai-chat-stage5-lab",fault="document-backlog"} == 1
+        for: 15s
+        labels: {severity: warning, service_name: ai-chat-stage5-lab}
+        annotations:
+          summary: Isolated AI-chat document backlog contract is active
+          description: Stage 5.3 authenticated contract state; never a production health signal.
+
+      - alert: AiChatSearchUnavailable
+        expr: aichat_stage5_fault_active{service_name="ai-chat-stage5-lab",fault="search-unavailable"} == 1
+        for: 15s
+        labels: {severity: warning, service_name: ai-chat-stage5-lab}
+        annotations:
+          summary: Isolated AI-chat search unavailable contract is active
+          description: Stage 5.3 authenticated contract state; never a production health signal.

@@ -64,6 +64,23 @@ loki.source.file "ai_chat_logs" {
 	forward_to = [loki.process.ai_chat_logs.receiver]
 }
 
+local.file_match "ai_chat_stage5_lab_logs" {
+	path_targets = [
+		{
+			"__path__"     = "/var/log/faultlab/ai-chat-stage5-lab.log",
+			"job"          = "ai-chat-stage5-lab",
+			"service_name" = "ai-chat-stage5-lab",
+			"environment"  = sys.env("DEPLOYMENT_ENVIRONMENT"),
+		},
+	]
+	sync_period = "5s"
+}
+
+loki.source.file "ai_chat_stage5_lab_logs" {
+	targets    = local.file_match.ai_chat_stage5_lab_logs.targets
+	forward_to = [loki.process.ai_chat_logs.receiver]
+}
+
 loki.process "ai_chat_logs" {
 	stage.json {
 		expressions = {

@@ -8,6 +8,9 @@ Create these files only on the cloud server before the first deployment:
 - grafana_admin_password
 - aidiag_deepseek_api_key
 - aidiag_stage4_operator_secret
+- faultlab_db_password
+- faultlab_control_token
+- aichat_stage5_fault_token
 
 Each file must contain only the secret value, without labels or surrounding quotes.
 Set the directory mode to 700. `grafana_admin_password` uses owner `root:root`, mode 600.
@@ -21,3 +24,8 @@ Stage 4 is enabled through `compose.stage4.yaml`. Both `aidiag_deepseek_api_key`
 `aidiag_stage4_operator_secret` are read by the non-root AIDiag process, so use owner
 `root`, group `10001`, mode `640`. Never put either value in `.env.cloud` or a Compose
 environment entry.
+
+Stage 5.3 requires a separate `aichat_stage5_fault_token`. It is mounted only
+into the profiled `ai-chat-stage5-lab` container as `aichat.stage5.fault.token`.
+Use at least 32 random bytes, owner `root`, group `10001`, mode `640`. Do not
+reuse the Stage 1 Fault Lab token or any AI-chat application credential.

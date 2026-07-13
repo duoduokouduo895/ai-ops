@@ -95,6 +95,20 @@ class RuleBasedDiagnosisServiceTests {
     }
 
     @Test
+    void mirrorsTheFourContractsForTheIsolatedStageFiveLab() {
+        for (var alertName : List.of("AiChatModelTimeout", "AiChatR2dbcPoolExhaustion", "AiChatDocumentBacklog",
+                "AiChatSearchUnavailable")) {
+            var result = service.diagnose(incident("ai-chat-stage5-lab", alertName));
+            assertThat(result.verificationStatus()).isEqualTo("SUPPORTED");
+            assertThat(result.groundTruth()).isNotBlank().isNotEqualTo("UNSPECIFIED");
+        }
+        assertThat(metricQueries).hasSize(4).allMatch(query -> query.contains("ai-chat-stage5-lab"));
+        assertThat(logQueries).hasSize(4).allMatch(query -> query.contains("service_name=\"ai-chat-stage5-lab\""));
+        assertThat(traceQueries).hasSize(4)
+                .allMatch(query -> query.contains("resource.service.name = \"ai-chat-stage5-lab\""));
+    }
+
+    @Test
     void unknownOrInjectedServiceAndAlertNeverReachTelemetry() {
         assertThat(service.diagnose(incident("ai-chat-candidate", "UnexpectedProductionAlert")).verificationStatus())
                 .isEqualTo("INSUFFICIENT_EVIDENCE");

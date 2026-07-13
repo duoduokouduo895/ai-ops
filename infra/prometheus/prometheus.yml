@@ -31,6 +31,13 @@ scrape_configs:
         labels:
           service_name: ai-chat-candidate
 
+  - job_name: ai-chat-stage5-lab
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: [ai-chat-stage5-lab:8080]
+        labels:
+          service_name: ai-chat-stage5-lab
+
   - job_name: faultlab-order
     metrics_path: /actuator/prometheus
     static_configs:

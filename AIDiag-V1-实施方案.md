@@ -660,11 +660,11 @@ Smoke 功能使用 `POST /internal/smoke/telemetry`，且只在 `AIDIAG_SMOKE_EN
 - [x] [P0 本地实现] 首批只实现 `AiChatModelTimeout`、`AiChatR2dbcPoolExhaustion`、`AiChatDocumentBacklog`、`AiChatSearchUnavailable` 四类规则；每类固定 PromQL、LogQL、阈值、Ground Truth、候选根因和受控 Runbook action；
 - [x] [P0 测试] 验证未知 service/alert、缺失指标、缺失日志、非法 label、超大响应和重复告警只产生可审计的证据不足结果，不伪造主要根因；
 - [x] [必要 P1] 增加 Tempo Trace evidence collector，限制单次 50 条、10 秒超时和响应大小；Trace 不可用时必须降级为 Metric/Log 报告；
-- [ ] [云端实施] 增加 AI-chat Prometheus scrape、告警规则、Alloy 日志源和 Grafana Dashboard，并发布 AIDiag 新 release。
+- [x] [云端实施] 增加 AI-chat Prometheus scrape、告警规则、Alloy 日志源和 Grafana Dashboard，并发布 AIDiag 新 release。
 
 门禁：现有 Stage 3 四类 Fault Lab 回归继续通过；AI-chat 告警可以自动建单并引用真实 Metric/Log evidence，Trace P1 失败时不影响 P0 报告。
 
-截至 2026-07-13，本地规则、AI-chat 必要低基数指标/脱敏事件、Prometheus 告警和 Grafana Dashboard 已实现；AIDiag 37 项测试通过（10 项需 PostgreSQL 的集成测试因本机无 Docker 跳过），AI-chat 151 项测试通过，`promtool` 校验 10 条规则成功。未知/注入式 service/alert 不触发遥测查询，Metric 或 Log 缺失时不生成主要根因；Tempo 超大或不可用时仍可由 Metric+Log 形成 P0 `SUPPORTED`。重复告警幂等沿用 Stage 2 的 12 并发入站集成用例，代码路径未改变，待新 release 云端构建时再次执行。详细证据见 [`docs/verification/2026-07-13-stage5-2-local.md`](docs/verification/2026-07-13-stage5-2-local.md)。云端发布、自动建单与真实 Metric/Log/Trace 联合验收尚未执行，因此 Stage 5.2 仍未整体完成。
+截至 2026-07-13，本地实现和私有云端发布已完成：AI-chat candidate `20260713-stage5-candidate-13`、AIDiag release `20260713-stage5-diagnosis-1`、4 条 AI-chat 告警和 7 Panel Dashboard 正常运行，Prometheus 抓取为 1，4 条固定 TraceQL 均由 Tempo 接受。AIDiag 镜像构建测试 27 项通过、10 项按条件跳过；随后用独立临时数据库重跑 10 项 PostgreSQL 集成测试并全部通过，AI-chat 152 项测试通过。唯一合成告警验证了 Alertmanager 自动建单、1 Incident / 1 run、证据不足不写主要根因及 resolved 生命周期。该合成验收不代表真实诊断准确率；真实 Metric/Log 联合证据和四类故障样本必须在 Stage 5.3 隔离实验中完成。详细证据见 [`docs/verification/2026-07-13-stage5-2-local.md`](docs/verification/2026-07-13-stage5-2-local.md)。
 
 #### Stage 5.3：隔离故障实验与端到端验收（P0）
 
@@ -690,8 +690,8 @@ Smoke 功能使用 `POST /internal/smoke/telemetry`，且只在 `AIDIAG_SMOKE_EN
 - [x] 定义遥测、日志、告警 label 与 AI-chat 接入契约；
 - [x] 建立合成遥测端到端测试；
 - [x] 完成阶段 0 验收；可进入最小 Fault Lab 的业务服务实现。
-- [ ] 完成 AI-chat 独立 Docker 构建、私有 telemetry 网络和回滚基线；
-- [ ] 完成 AI-chat 遥测隐私审查后再允许 Loki/Tempo 采集；
+- [x] 完成 AI-chat 独立 Docker 构建、私有 telemetry 网络和回滚基线；
+- [x] 完成 AI-chat 遥测隐私审查后再允许 Loki/Tempo 采集；
 - [ ] 完成四类 AI-chat 规则和隔离故障验收后再启动自研运维前端。
 
 ---

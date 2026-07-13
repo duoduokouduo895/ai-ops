@@ -16,7 +16,9 @@ GCP 当前约 15 GiB 内存、无 Swap，且磁盘使用率已经达到 80%，V1
 - Elasticsearch 9.3.2 + analysis-ik 9.3.2：鉴权、IK 中文检索、业务 Mapping、dense vector KNN 通过，restart 0；
 - AI-chat 候选：166 项构建测试、真实 Guest SSE、消息持久化、Nacos 注册、Prometheus/Loki/Tempo 关联通过；
 - MySQL `ai_agent_db.flyway_schema_history` 当前成功版本为 V4，V1 production 首启将执行 V5 outbox 迁移；
-- GCP 尚无 `/opt/ai-chat/runtime/production.env`、生产 Secret、生产 Compose Project 或本机旧 production release；
+- GCP 已安装 root-owned、mode 600 的 `/opt/ai-chat/runtime/production.env`，cutover id 为
+  `20260713-v1-mvp-cutover-1` 且确认值保持 `false`；生产 Secret、生产 Compose Project 和本机旧
+  production release 仍不存在；
 - Nginx 与 DNS 尚未指向新 AI-chat，旧线上实例仍是首次切换失败时的唯一应用回滚链。
 
 ## 3. 分阶段切换

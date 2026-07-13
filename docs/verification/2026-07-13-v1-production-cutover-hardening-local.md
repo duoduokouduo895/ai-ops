@@ -34,6 +34,8 @@
 - 修改后的 Nacos 3 / Elasticsearch 9 Compose 使用云端真实 runtime env 执行 `docker compose config --quiet` 通过；
 - 未提供确认字符串时，生产身份脚本以 64 拒绝；缺少 production env 时，生产预检以 67 拒绝；
   前后均不存在生产 Secret 目录，验证过程无状态修改；
+- 随后已从已校验 release 安装 root-owned、mode 600 的 `production.env`，固定 cutover id 并保持
+  `AICHAT_PRODUCTION_CONFIRMED=false`；`--prepare` 以 68 在首个缺失生产 Secret 处拒绝，未启动容器；
 - 线上 Nacos 3、Elasticsearch 9、AI-chat 候选、旧 Nacos 2 和旧 Elasticsearch 8 均未重启，Nginx/DNS 未修改。
 
 ## 尚未执行

@@ -1,0 +1,82 @@
+services:
+  elasticsearch9-candidate:
+    image: ${ELASTICSEARCH9_CANDIDATE_IMAGE:?Load the candidate image name from versions.env}
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        ELASTICSEARCH9_BASE_IMAGE: ${ELASTICSEARCH9_BASE_IMAGE:?Load the pinned Elasticsearch base image from versions.env}
+        ELASTICSEARCH_VERSION: "9.3.2"
+        IK_PLUGIN_URL: ${ELASTICSEARCH9_IK_PLUGIN_URL:?Load the pinned IK URL from versions.env}
+        IK_PLUGIN_SHA256: ${ELASTICSEARCH9_IK_PLUGIN_SHA256:?Load the pinned IK SHA-256 from versions.env}
+    container_name: elasticsearch-v9-candidate
+    restart: unless-stopped
+    environment:
+      discovery.type: single-node
+      cluster.name: aichat-v1-candidate
+      node.name: elasticsearch-v9-candidate
+      xpack.security.enabled: "true"
+      xpack.security.enrollment.enabled: "false"
+      xpack.security.http.ssl.enabled: "false"
+      xpack.security.transport.ssl.enabled: "false"
+      ELASTIC_PASSWORD_FILE: /run/secrets/elastic.password
+      ES_JAVA_OPTS: -Xms1g -Xmx1g
+      ingest.geoip.downloader.enabled: "false"
+      action.destructive_requires_name: "true"
+    secrets:
+      - source: elastic_password
+        target: elastic.password
+    volumes:
+      - elasticsearch9_candidate_data:/usr/share/elasticsearch/data
+    ports:
+      - "127.0.0.1:${ELASTICSEARCH9_HTTP_PORT:-19200}:9200"
+    networks:
+      middleware:
+        aliases:
+          - elasticsearch-v9-candidate
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          curl --fail --silent --max-time 3
+          --user "elastic:$$(cat /run/secrets/elastic.password)"
+          'http://127.0.0.1:9200/_cluster/health?wait_for_status=yellow&timeout=1s'
+          >/dev/null
+      interval: 10s
+      timeout: 5s
+      retries: 24
+      start_period: 120s
+    read_only: true
+    tmpfs:
+      - /tmp:rw,nosuid,nodev,noexec,size=256m,mode=1777
+      - /usr/share/elasticsearch/logs:rw,nosuid,nodev,noexec,size=256m,mode=0770,uid=1000,gid=0
+    mem_limit: 2560m
+    cpus: 1.50
+    pids_limit: 512
+    ulimits:
+      nofile:
+        soft: 65535
+        hard: 65535
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    stop_grace_period: 60s
+    logging:
+      driver: json-file
+      options:
+        max-size: 20m
+        max-file: "3"
+
+networks:
+  middleware:
+    external: true
+    name: middleware-net
+
+volumes:
+  elasticsearch9_candidate_data:
+    name: ${ELASTICSEARCH9_DATA_VOLUME:-elasticsearch9-candidate-data}
+
+secrets:
+  elastic_password:
+    file: ${ELASTICSEARCH9_SECRETS_DIR:?Set the Elasticsearch 9 candidate secrets directory}/elastic_password

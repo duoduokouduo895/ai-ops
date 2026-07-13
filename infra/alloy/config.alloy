@@ -64,6 +64,37 @@ loki.source.file "ai_chat_logs" {
 	forward_to = [loki.process.ai_chat_logs.receiver]
 }
 
+// The AI-chat release gate writes only bounded, redacted startup failures here.
+// This covers JVM failures before the application JSON logger is initialized
+// without exposing the Docker socket to Alloy or any application container.
+local.file_match "ai_chat_startup_logs" {
+	path_targets = [
+		{
+			"__path__"     = "/var/log/ai-chat/startup-failures.log",
+			"job"          = "ai-chat-startup",
+			"service_name" = "ai-chat-startup",
+			"environment"  = sys.env("DEPLOYMENT_ENVIRONMENT"),
+		},
+	]
+	sync_period = "10s"
+}
+
+loki.source.file "ai_chat_startup_logs" {
+	targets    = local.file_match.ai_chat_startup_logs.targets
+	forward_to = [loki.process.ai_chat_startup_logs.receiver]
+}
+
+loki.process "ai_chat_startup_logs" {
+	stage.static_labels {
+		values = {
+			event = "ai_chat_startup_failure",
+			level = "ERROR",
+		}
+	}
+
+	forward_to = [loki.write.local.receiver]
+}
+
 local.file_match "ai_chat_stage5_lab_logs" {
 	path_targets = [
 		{

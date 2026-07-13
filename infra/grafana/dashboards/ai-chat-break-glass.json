@@ -39,7 +39,7 @@
       "gridPos": {"h": 8, "w": 12, "x": 12, "y": 7},
       "id": 4,
       "options": {"dedupStrategy": "none", "enableInfiniteScrolling": false, "enableLogDetails": true, "prettifyLogMessage": false, "showCommonLabels": false, "showLabels": false, "showTime": true, "sortOrder": "Descending", "wrapLogMessage": true},
-      "targets": [{"editorMode": "code", "expr": "{service_name=\"ai-chat-candidate\"} | json | level=~\"ERROR|WARN\"", "queryType": "range", "refId": "A"}],
+      "targets": [{"editorMode": "code", "expr": "{service_name=~\"ai-chat-candidate|ai-chat-startup\"} |~ \"(?i)error|warn|exception|failed|startup_failure\"", "queryType": "range", "refId": "A"}],
       "title": "最近启动与运行错误",
       "type": "logs"
     },

@@ -4,7 +4,7 @@ AIDiag 是一个面向 Java 服务的证据驱动型异常诊断平台。它接�
 
 平台当前重点接入 **AI-chat**：通过私有遥测网络监控候选实例，不侵入 AI-chat 业务代码，也不会把 Prompt、回答、用户 ID、会话 ID 或 Secret 写入运维遥测。
 
-> 当前状态：Stage 0～4、Stage 5.1～5.3 已完成；Stage 5.4 的独立故障入口和只读 API 已发布，AI-chat Admin 仅作为服务存活时的辅助入口。Stage 5.3 的 4 类场景 × 5 轮结果证明遥测契约可重复运行，不等同于真实生产准确率。
+> 当前状态：Stage 0～4、Stage 5.1～5.3 已完成；Stage 5.4 的独立故障入口和只读 API 已发布，AI-chat Admin 仅作为服务存活时的辅助入口。Stage 5.5 正在收紧 Nacos、Secret、新版候选与生产切换门禁；尚未对外声明 V1 正式发布。
 
 ## 核心能力
 
@@ -47,7 +47,7 @@ AI-chat 与 AIDiag 只通过遥测协议和告警协议连接。AIDiag 故障不
 | 指标与告警 | Prometheus 3.13.1、Alertmanager 0.33.1 |
 | 日志与 Trace | Grafana Alloy 1.17.1、Loki 3.7.3、Tempo 3.0.2、OpenTelemetry Java Agent 2.29.0 |
 | 可视化 | Grafana 13.1.0 |
-| AI-chat 接入基线 | Java 17、Spring Boot 3.3、WebFlux、R2DBC、RabbitMQ、Elasticsearch、Redis、LangChain4j |
+| AI-chat 发布候选 | Java 21、Spring Boot 4.0.7、Spring Cloud 2025.1.2、Spring Cloud Alibaba 2025.1.0.0、Nacos Client 3.1.1、LangChain4j 1.15.1 |
 
 基础设施镜像在 [`versions.env`](./versions.env) 中同时锁定版本和 digest，避免仅使用浮动 tag。
 
@@ -64,6 +64,7 @@ AI-chat 与 AIDiag 只通过遥测协议和告警协议连接。AIDiag 故障不
 | Stage 5.2 | 已完成发布 | 四类 AI-chat 规则、Dashboard、自动建单传输验收 |
 | Stage 5.3 | 已完成 | 隔离 contract lab、四类证据闭环、恢复、DeepSeek 联动与评测归档 |
 | Stage 5.4 | 独立入口已发布 | Blackbox 外部探针、独立 Grafana 故障入口、鉴权只读 API；Admin 为辅助入口 |
+| Stage 5.5 | 进行中 | 版本兼容、Nacos 3/鉴权、Secret 轮换、新版候选、主机外监控和生产切换门禁 |
 
 完整范围、门禁和遗留风险请阅读 [`AIDiag-V1-实施方案.md`](./AIDiag-V1-实施方案.md)。云端人工操作与回滚说明位于 [`云端实施操作手册.md`](./云端实施操作手册.md)。
 
@@ -114,7 +115,7 @@ Windows PowerShell：
 
 ## 下一步
 
-下一步是在不切换 DNS 的前提下继续 shadow mode：收集非重叠真实样本并统计误报、漏报、弃权与恢复时延；同时补容器启动早期日志采集和宿主机外部可用性监控。正式切流前仍需完成 Nacos/Secret 收紧、管理员端真实登录验收和 DNS/Nginx 变更评审。
+下一步先在不切换 DNS 的前提下建立隔离 Nacos 3 候选并发布新版 AI-chat 私有候选，完成配置读取、鉴权、真实登录、SSE、遥测与回滚验收；同时补宿主机外部可用性监控。随后在维护窗口逐项轮换 Secret、停止旧写任务、预置 Nginx/TLS 并完成生产切换。shadow mode 的非重叠真实样本继续收集，但不阻塞个人展示版 V1；它只阻止我们宣称生产诊断准确率。
 
 ## License
 

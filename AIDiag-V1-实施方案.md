@@ -1,6 +1,6 @@
 # AIDiag V1 实施方案
 
-> 文档版本：V1.6（Stage 5.4 独立故障入口收紧）
+> 文档版本：V1.7（V1 发布兼容性与安全门禁收紧）
 > 更新日期：2026-07-13
 > 定位：面向 Java 微服务的只读智能诊断层。第一批真实接入目标为 AI-chat，并以受控 Fault Lab 完成故障评测。
 
@@ -383,7 +383,13 @@ LLM 调用与工具调用均需限流和熔断
 
 ## 9. AI-chat 接入契约
 
-AI-chat 通过遥测协议接入，不依赖 AIDiag 的业务代码。当前真实基线为 Spring Boot 3.3.0、Java 17、WebFlux、R2DBC、RabbitMQ、Elasticsearch、Redis 和 LangChain4j；Stage 5 不要求升级 Java 21，也不把 Spring AI 引入 AI-chat。两个项目只通过 Prometheus、Alertmanager、Loki、OTLP 和 AIDiag HTTP API 形成协议级边界。
+AI-chat 通过遥测协议接入，不依赖 AIDiag 的业务代码。V1 发布候选基线已收紧为 Java 21、Spring Boot 4.0.7、Spring Cloud 2025.1.2、Spring Cloud Alibaba 2025.1.0.0、Nacos Client 3.1.1、WebFlux、R2DBC、RabbitMQ、Elasticsearch、Redis 和 LangChain4j 1.15.1；不把 Spring AI 引入 AI-chat。两个项目只通过 Prometheus、Alertmanager、Loki、OTLP 和 AIDiag HTTP API 形成协议级边界。
+
+该组合不是“所有组件都取最新”的拼接：Spring Cloud 2025.1.2 是与 Boot 4.0/4.1 对齐的受支持 release train，Spring Cloud Alibaba 2025.1.0.0 负责 Boot 4 / Cloud 2025.1 / Nacos Client 3.1.1 的组合。AI-chat 暂不升到 Boot 4.1，是因为当前 Alibaba 稳定发布线仍以 2025.1 为兼容基线。LangChain4j 核心固定 1.15.1，Spring Boot 4 starter 固定 1.15.1-beta25；beta 仅限 Spring 集成层，必须以全量回归和真实 Provider 契约测试约束风险。
+
+当前云端 Nacos Server 仍为 2.1.1，而新版客户端为 3.1.1。编译和单元测试不能证明该跨代组合可用于生产；正式发布前必须在隔离 Nacos 3 候选上完成配置读取、鉴权、服务注册、断线重连和回滚验证。官方升级说明明确指出 2.1.x～2.4.x 可升级到 3.x，但数据库表结构发生变化，因此不得直接替换现有 Nacos 容器。
+
+2026-07-13 的私有候选已进一步证明该门禁必要：新版客户端连接现有 2.1.1 时把 9 个已有 Data ID 判定为空，而服务端 HTTP API 对同一 Data ID 均返回 200 和非空正文。候选因此缺少 R2DBC 配置并 fail closed，激活脚本恢复旧候选。后续不允许通过本地默认凭据或把 Nacos import 改为 optional 来绕过；必须改用隔离 Nacos 3 候选验证。
 
 ### 9.1 部署与私有网络
 
@@ -635,7 +641,7 @@ Smoke 功能使用 `POST /internal/smoke/telemetry`，且只在 `AIDIAG_SMOKE_EN
 
 #### Stage 5.0：部署与私有网络基线（P0）
 
-- [x] [本地实现] 为 AI-chat backend 增加 `.dockerignore`、Java 17 多阶段 `Dockerfile`、版本锁定、独立 Compose、健康检查、资源上限和 release/rollback 脚本；
+- [x] [本地实现] 为 AI-chat backend 增加 `.dockerignore`、Java 21 多阶段 `Dockerfile`、版本锁定、独立 Compose、健康检查、资源上限和 release/rollback 脚本；
 - [x] [本地验证] 从干净 Git 归档完成 Docker build 和应用测试；镜像中不得包含源码、构建缓存、前端 `node_modules` 或 Secret；
 - [x] [云端实施] 上传源码归档及 SHA-256，在独立 release 构建 AI-chat；连接现有中间件网络和外部 `aidiag-telemetry`，但不公开 management/OTLP 端口；
 - [ ] [安全门禁] 关闭 Nacos 匿名读取或将其收敛到受控网络，生成不回显值的凭据清单，并为每个历史 Secret 定义“新建/切换/验证/撤销/回滚”顺序；
@@ -694,6 +700,20 @@ Smoke 功能使用 `POST /internal/smoke/telemetry`，且只在 `AIDIAG_SMOKE_EN
 
 门禁：AI-chat 停止时，Grafana/Prometheus/Blackbox 仍存活且应用探针变为 0；任一中间件网络不可达时仅对应 component 变为 0；未认证只读 API 返回 401，越界分页返回 400；Admin 集成失败不得影响聊天主链。当前独立入口云端验收见 [`docs/verification/2026-07-13-stage5-4.md`](docs/verification/2026-07-13-stage5-4.md)。
 
+#### Stage 5.5：V1 发布收紧（P0）
+
+- [x] [本地兼容性] AI-chat 统一 Java 21 编译/构建/运行时，升级到 Boot 4.0.7、Cloud 2025.1.2、Alibaba 2025.1.0.0、Nacos Client 3.1.1 和 LangChain4j 1.15.1；完成 159 项回归和可执行 Jar 构建；
+- [x] [本地安全] 删除未来可能误开放的匿名 `/api/test/**` seam，扩大运行日志隐私测试，禁止认证详情、用户输入、异常原文、RabbitMQ nack reason 和知识库 ID 列表进入日志；
+- [x] [发布结构] 候选与生产共用受强校验的 Compose 模板，候选强制关闭 Flyway/listener/scheduler 等写任务，生产强制开启并需要维护窗口确认；Nacos 凭据使用文件型 Secret；
+- [ ] [Nacos 门禁] 备份现有 Nacos 数据库和配置摘要，在独立端口/独立数据库验证 Nacos 3.2.1；通过后再单独评审现有 Nacos 升级、鉴权和回滚；
+- [ ] [候选门禁] 发布新版 AI-chat 私有候选，验证配置读取、依赖连接、真实登录、一次受控 SSE Chat、指标/日志/Trace、资源上限和候选回滚；
+- [ ] [可观测门禁] 完成启动早期日志采集和主机外 HTTPS/主机可用性检查；Grafana 继续保持 loopback 或经 TLS/鉴权反向代理访问；
+- [ ] [Secret 门禁] 轮换曾经进入聊天记录或 Git 历史的 DeepSeek、Nacos、JWT、数据库、中间件和 OSS 凭据，并逐项验证旧实例回滚策略；
+- [ ] [生产切换] 在维护窗口停止旧实例写任务，执行生产 Flyway/启动/业务验收，预置 Nginx/TLS 后再切换 DNS；失败时按记录恢复旧 upstream/A 记录；
+- [ ] [发布归档] 归档 SBOM、镜像 digest、测试/Compose/健康/业务/遥测证据、已知限制和回滚演练结果，创建 V1 tag 后才对外声明第一版发布。
+
+截至 2026-07-13，V1 的业务闭环已经具备，剩余工作不是继续扩展诊断功能，而是完成 Nacos、Secret、候选与生产切换等发布门禁。在这些门禁通过前可以继续展示现有私有候选和 Grafana，但不能把新版 AI-chat 标记为正式生产发布。
+
 总验收：AI-chat 的真实告警可生成引用其真实遥测证据的确定性诊断报告；数据采集不包含 Prompt、回答、用户/会话标识或 Secret；模型失败不影响规则报告；AIDiag 故障不阻断 AI-chat 主业务；部署和回滚均不要求手工上传 Jar。
 
 ---
@@ -713,6 +733,7 @@ Smoke 功能使用 `POST /internal/smoke/telemetry`，且只在 `AIDIAG_SMOKE_EN
 - [x] 完成 AI-chat 独立 Docker 构建、私有 telemetry 网络和回滚基线；
 - [x] 完成 AI-chat 遥测隐私审查后再允许 Loki/Tempo 采集；
 - [x] 完成四类 AI-chat 规则、隔离故障验收和 Stage 5.4 独立故障入口；Admin 运维页只作为辅助入口，不与 AI-chat 共用救援职责。
+- [ ] 完成 Stage 5.5 的 Nacos 3、Secret 轮换、新版候选、主机外监控和生产切换门禁后发布 V1。
 
 ---
 
@@ -727,6 +748,8 @@ Smoke 功能使用 `POST /internal/smoke/telemetry`，且只在 `AIDIAG_SMOKE_EN
 版本基线按 2026-07-11 的官方发布信息确定。实施时应再次核验 patch 和镜像 digest：
 
 - [Spring Boot 系统要求](https://docs.spring.io/spring-boot/system-requirements.html) 与 [Spring Boot 4.1.0](https://github.com/spring-projects/spring-boot/releases/tag/v4.1.0)；
+- [Spring Cloud 版本兼容矩阵](https://spring.io/projects/spring-cloud/)、[Spring Cloud Alibaba 2025.1.0.0](https://github.com/alibaba/spring-cloud-alibaba/releases/tag/2025.1.0.0) 与 [LangChain4j 1.15.1](https://github.com/langchain4j/langchain4j/releases/tag/1.15.1)；
+- [Nacos 3.2.1](https://github.com/alibaba/nacos/releases/tag/3.2.1) 与 [Nacos 3 升级说明](https://nacos.io/en/docs/v3.0/manual/admin/upgrading/)；
 - [Spring AI 2.0 与 Boot 兼容说明](https://docs.spring.io/spring-ai/reference/getting-started.html)；
 - [Promtail EOL 与 Alloy 迁移说明](https://grafana.com/docs/loki/latest/send-data/promtail/)；
 - [OpenTelemetry Java Agent 2.29.0](https://github.com/open-telemetry/opentelemetry-java-instrumentation/releases/tag/v2.29.0)；

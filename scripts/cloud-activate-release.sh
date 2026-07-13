@@ -29,6 +29,16 @@ set_compose_files() {
   fi
 }
 
+switch_current_link() {
+  local target_release="$1"
+  if [[ -e "${next_link}" || -L "${next_link}" ]]; then
+    [[ -L "${next_link}" ]] || { echo "Current next-link path exists and is not a symlink" >&2; return 69; }
+    unlink "${next_link}"
+  fi
+  ln -s "${target_release}" "${next_link}"
+  mv -Tf "${next_link}" "${current_link}"
+}
+
 declare -a compose_files
 set_compose_files "${release}"
 compose=(docker compose --project-directory "${release}" "${compose_files[@]}" \
@@ -42,8 +52,7 @@ if [[ -L "${current_link}" ]]; then
   previous_release="$(readlink -f "${current_link}")"
 fi
 
-ln -s "${release}" "${next_link}"
-mv -Tf "${next_link}" "${current_link}"
+switch_current_link "${release}"
 
 set_compose_files "${release}"
 # Use the immutable release path, not the stable symlink, for bind mounts. Otherwise Docker keeps
@@ -52,8 +61,7 @@ current_compose=(docker compose --project-directory "${release}" "${compose_file
   --env-file "${release}/versions.env" --env-file "${runtime_dir}/.env.cloud")
 if ! "${current_compose[@]}" up -d --remove-orphans --wait --wait-timeout 180; then
   if [[ -n "${previous_release}" ]]; then
-    ln -s "${previous_release}" "${next_link}"
-    mv -Tf "${next_link}" "${current_link}"
+    switch_current_link "${previous_release}"
     set_compose_files "${previous_release}"
     rollback_compose=(docker compose --project-directory "${previous_release}" "${compose_files[@]}" \
       --env-file "${previous_release}/versions.env" --env-file "${runtime_dir}/.env.cloud")

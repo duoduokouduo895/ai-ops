@@ -27,6 +27,7 @@ services:
       - source: elastic_password
         target: elastic.password
     volumes:
+      - elasticsearch9_candidate_config:/usr/share/elasticsearch/config
       - elasticsearch9_candidate_data:/usr/share/elasticsearch/data
     ports:
       - "127.0.0.1:${ELASTICSEARCH9_HTTP_PORT:-19200}:9200"
@@ -74,6 +75,8 @@ networks:
     name: middleware-net
 
 volumes:
+  elasticsearch9_candidate_config:
+    name: ${ELASTICSEARCH9_CONFIG_VOLUME:-elasticsearch9-candidate-config}
   elasticsearch9_candidate_data:
     name: ${ELASTICSEARCH9_DATA_VOLUME:-elasticsearch9-candidate-data}
 

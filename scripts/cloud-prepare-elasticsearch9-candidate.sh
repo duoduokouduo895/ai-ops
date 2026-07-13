@@ -42,12 +42,14 @@ secrets_dir="${runtime_dir}/.secrets"
 evidence_dir="${base_dir}/evidence/$(date -u +%Y%m%dT%H%M%SZ)"
 http_port="${ELASTICSEARCH9_HTTP_PORT:-19200}"
 compose_project="${ELASTICSEARCH9_COMPOSE_PROJECT:-elasticsearch9-candidate}"
+config_volume="${ELASTICSEARCH9_CONFIG_VOLUME:-elasticsearch9-candidate-config}"
 data_volume="${ELASTICSEARCH9_DATA_VOLUME:-elasticsearch9-candidate-data}"
 aichat_secrets_dir="${AICHAT_CANDIDATE_SECRETS_DIR:-/opt/ai-chat/runtime/.secrets/candidate}"
 
 [[ "${base_dir}" == /opt/elasticsearch9-candidate* \
   && "${http_port}" =~ ^[0-9]+$ && ${http_port} -ge 1024 && ${http_port} -le 65535 \
   && "${compose_project}" =~ ^[a-z0-9][a-z0-9_-]{2,62}$ \
+  && "${config_volume}" =~ ^[a-zA-Z0-9][a-zA-Z0-9_.-]{2,127}$ \
   && "${data_volume}" =~ ^[a-zA-Z0-9][a-zA-Z0-9_.-]{2,127}$ ]] \
   || { echo "Candidate path, port, project, or volume name is unsafe" >&2; exit 68; }
 [[ ! -e "${runtime_env}" ]] \
@@ -56,6 +58,8 @@ aichat_secrets_dir="${AICHAT_CANDIDATE_SECRETS_DIR:-/opt/ai-chat/runtime/.secret
   || { echo "Elasticsearch 9 candidate container already exists" >&2; exit 69; }
 [[ "$(docker volume ls --quiet --filter "name=^${data_volume}$")" == "" ]] \
   || { echo "Elasticsearch 9 candidate data volume already exists" >&2; exit 69; }
+[[ "$(docker volume ls --quiet --filter "name=^${config_volume}$")" == "" ]] \
+  || { echo "Elasticsearch 9 candidate config volume already exists" >&2; exit 69; }
 docker network inspect middleware-net >/dev/null
 if ss -H -ltn "sport = :${http_port}" | grep -q .; then
   echo "Elasticsearch candidate loopback port is already in use: ${http_port}" >&2
@@ -83,6 +87,7 @@ printf '%s\n' "$(docker inspect --format '{{.RestartCount}}' elasticsearch)" \
 cat >"${runtime_env}" <<EOF
 ELASTICSEARCH9_HTTP_PORT=${http_port}
 ELASTICSEARCH9_COMPOSE_PROJECT=${compose_project}
+ELASTICSEARCH9_CONFIG_VOLUME=${config_volume}
 ELASTICSEARCH9_DATA_VOLUME=${data_volume}
 ELASTICSEARCH9_SECRETS_DIR=${secrets_dir}
 AICHAT_CANDIDATE_SECRETS_DIR=${aichat_secrets_dir}
@@ -116,58 +121,9 @@ created=true
 elasticsearch9_compose up -d elasticsearch9-candidate
 wait_for_elasticsearch9_health 60
 
-tmp_dir="$(mktemp -d "${runtime_dir}/.bootstrap.XXXXXX")"
-cleanup_tmp() { rm -rf -- "${tmp_dir}"; }
-trap cleanup_tmp EXIT
-write_basic_auth_header "${secrets_dir}/client_username" "${secrets_dir}/client_password" \
-  "${tmp_dir}/client-header"
-write_basic_auth_header <(printf '%s' elastic) "${secrets_dir}/elastic_password" \
-  "${tmp_dir}/elastic-header"
-
-cat >"${tmp_dir}/role.json" <<'JSON'
-{
-  "cluster": ["monitor"],
-  "indices": [
-    {
-      "names": [
-        "conversations",
-        "knowledge_base_chunks",
-        "knowledge_base_embeddings*",
-        "kb_*"
-      ],
-      "privileges": [
-        "auto_configure",
-        "create_index",
-        "manage",
-        "read",
-        "write",
-        "view_index_metadata"
-      ]
-    }
-  ]
-}
-JSON
-curl --fail --silent --show-error --connect-timeout 3 --max-time 10 \
-  -H "@${tmp_dir}/elastic-header" -H 'Content-Type: application/json' \
-  -X PUT "http://127.0.0.1:${ELASTICSEARCH9_HTTP_PORT}/_security/role/aichat_candidate" \
-  --data-binary "@${tmp_dir}/role.json" --output "${tmp_dir}/role-response.json"
-
-printf '{"password":"%s","roles":["aichat_candidate"],"full_name":"AI-chat isolated candidate"}' \
-  "$(cat "${secrets_dir}/client_password")" >"${tmp_dir}/user.json"
-curl --fail --silent --show-error --connect-timeout 3 --max-time 10 \
-  -H "@${tmp_dir}/elastic-header" -H 'Content-Type: application/json' \
-  -X POST "http://127.0.0.1:${ELASTICSEARCH9_HTTP_PORT}/_security/user/$(cat "${secrets_dir}/client_username")" \
-  --data-binary "@${tmp_dir}/user.json" --output "${tmp_dir}/user-response.json"
-
-install -d -o 10001 -g 10001 -m 700 "${aichat_secrets_dir}"
-install -o 10001 -g 10001 -m 0400 "${secrets_dir}/client_username" \
-  "${aichat_secrets_dir}/elasticsearch_username"
-install -o 10001 -g 10001 -m 0400 "${secrets_dir}/client_password" \
-  "${aichat_secrets_dir}/elasticsearch_password"
+bootstrap_elasticsearch9_client
 
 trap - ERR
-cleanup_tmp
-trap - EXIT
 "${release}/scripts/cloud-verify-elasticsearch9-candidate.sh" "${release}" \
   | tee "${evidence_dir}/verification.txt"
 chmod 600 "${evidence_dir}/verification.txt"

@@ -49,6 +49,14 @@ ports="$(docker port "${container}")"
 grep -Fq "127.0.0.1:${ELASTICSEARCH9_HTTP_PORT}" <<<"${ports}"
 grep -Eq '0\.0\.0\.0|\[::\]' <<<"${ports}" \
   && { echo "Elasticsearch 9 candidate unexpectedly exposes a public listener" >&2; exit 70; }
+config_volume="${ELASTICSEARCH9_CONFIG_VOLUME:-elasticsearch9-candidate-config}"
+mounts="$(docker inspect --format '{{range .Mounts}}{{printf "%s|%s|%s\n" .Type .Name .Destination}}{{end}}' "${container}")"
+grep -Fxq "volume|${config_volume}|/usr/share/elasticsearch/config" <<<"${mounts}" \
+  || { echo "Elasticsearch candidate config volume is missing or drifted" >&2; exit 70; }
+grep -Fxq "volume|${ELASTICSEARCH9_DATA_VOLUME}|/usr/share/elasticsearch/data" <<<"${mounts}" \
+  || { echo "Elasticsearch candidate data volume is missing or drifted" >&2; exit 70; }
+[[ "${config_volume}" != "${ELASTICSEARCH9_DATA_VOLUME}" ]] \
+  || { echo "Elasticsearch config and data must not share a volume" >&2; exit 70; }
 
 source_restart="$(cat "${runtime_dir}/source-elasticsearch-restart-count")"
 [[ "$(docker inspect --format '{{.State.Running}}' elasticsearch)" == true \

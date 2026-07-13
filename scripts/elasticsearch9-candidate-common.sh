@@ -74,3 +74,56 @@ wait_for_elasticsearch9_health() {
   done
   return 1
 }
+
+bootstrap_elasticsearch9_client() (
+  set -Eeuo pipefail
+  local tmp_dir aichat_secrets_dir
+  tmp_dir="$(mktemp -d "${runtime_dir}/.bootstrap.XXXXXX")"
+  trap 'rm -rf -- "${tmp_dir}"' EXIT
+  aichat_secrets_dir="${AICHAT_CANDIDATE_SECRETS_DIR:-/opt/ai-chat/runtime/.secrets/candidate}"
+
+  printf '%s' elastic >"${tmp_dir}/elastic-username"
+  write_basic_auth_header "${tmp_dir}/elastic-username" "${secrets_dir}/elastic_password" \
+    "${tmp_dir}/elastic-header"
+
+  cat >"${tmp_dir}/role.json" <<'JSON'
+{
+  "cluster": ["monitor"],
+  "indices": [
+    {
+      "names": [
+        "conversations",
+        "knowledge_base_chunks",
+        "knowledge_base_embeddings*",
+        "kb_*"
+      ],
+      "privileges": [
+        "auto_configure",
+        "create_index",
+        "manage",
+        "read",
+        "write",
+        "view_index_metadata"
+      ]
+    }
+  ]
+}
+JSON
+  curl --fail --silent --show-error --connect-timeout 3 --max-time 10 \
+    -H "@${tmp_dir}/elastic-header" -H 'Content-Type: application/json' \
+    -X PUT "http://127.0.0.1:${ELASTICSEARCH9_HTTP_PORT}/_security/role/aichat_candidate" \
+    --data-binary "@${tmp_dir}/role.json" --output "${tmp_dir}/role-response.json"
+
+  printf '{"password":"%s","roles":["aichat_candidate"],"full_name":"AI-chat isolated candidate"}' \
+    "$(cat "${secrets_dir}/client_password")" >"${tmp_dir}/user.json"
+  curl --fail --silent --show-error --connect-timeout 3 --max-time 10 \
+    -H "@${tmp_dir}/elastic-header" -H 'Content-Type: application/json' \
+    -X POST "http://127.0.0.1:${ELASTICSEARCH9_HTTP_PORT}/_security/user/$(cat "${secrets_dir}/client_username")" \
+    --data-binary "@${tmp_dir}/user.json" --output "${tmp_dir}/user-response.json"
+
+  install -d -o 10001 -g 10001 -m 700 "${aichat_secrets_dir}"
+  install -o 10001 -g 10001 -m 0400 "${secrets_dir}/client_username" \
+    "${aichat_secrets_dir}/elasticsearch_username"
+  install -o 10001 -g 10001 -m 0400 "${secrets_dir}/client_password" \
+    "${aichat_secrets_dir}/elasticsearch_password"
+)

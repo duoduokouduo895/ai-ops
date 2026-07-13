@@ -1,9 +1,9 @@
 # Stage 5.1 AI-chat 遥测与隐私验证记录
 
-> 日期：2026-07-13  
-> AI-chat release：`20260713-stage5-candidate-12`  
-> AIDiag release：`20260713-stage5-observability-1`  
-> AI-chat implementation commit：`4aaaf37`
+> 日期：2026-07-13
+> AI-chat release：`20260713-stage5-candidate-12`
+> AIDiag release：`20260713-stage5-observability-1`
+> AI-chat implementation commit：`747a429`
 
 ## 结论
 

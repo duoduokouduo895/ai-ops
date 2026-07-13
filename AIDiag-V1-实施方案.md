@@ -644,13 +644,15 @@ Smoke 功能使用 `POST /internal/smoke/telemetry`，且只在 `AIDIAG_SMOKE_EN
 
 #### Stage 5.1：AI-chat 遥测与隐私收紧（P0）
 
-- [ ] [本地实现] 增加 BOM 管理的 Prometheus registry、独立 management port 和受网络隔离的 `/actuator/prometheus`；
-- [ ] [本地实现] 为 SSE 主链增加请求结果、TTFT、完整耗时、活跃流、取消/超时和 Provider outcome；为 R2DBC、RabbitMQ outbox、Elasticsearch/RAG 增加必要的低基数指标；
-- [ ] [本地实现] 接入固定 OTel Java Agent 2.29.0，只向 Alloy 导出 Trace；增加脱敏 JSON 运维日志和 traceId/spanId，禁止采集 Prompt、回答、用户/会话标识和 Secret；
-- [ ] [测试] 覆盖成功、错误、取消、超时、重复订阅和高并发；验证 tag 基数有界、请求正文不进入 metric/log/span；
+- [x] [本地实现] 增加 BOM 管理的 Prometheus registry、独立 management port 和受网络隔离的 `/actuator/prometheus`；
+- [x] [本地实现] 为 SSE 主链增加请求结果、TTFT、完整耗时、活跃流、取消/超时和 Provider outcome；为 R2DBC、RabbitMQ outbox、Elasticsearch/RAG 增加必要的低基数指标；
+- [x] [本地实现] 接入固定 OTel Java Agent 2.29.0，只向 Alloy 导出 Trace；增加脱敏 JSON 运维日志和 traceId/spanId，禁止采集 Prompt、回答、用户/会话标识和 Secret；
+- [x] [测试] 覆盖成功、错误、取消、超时、重复订阅和高并发；验证 tag 基数有界、请求正文不进入 metric/log/span；
 - [ ] [云端验收] Prometheus 连续抓取成功，Loki 可按 service_name/event 查询，Tempo 可定位一次真实测试请求的 Trace。
 
 门禁：三类信号可由同一 traceId/时间窗关联；日志与 Trace 抽样检查不含隐私数据；遥测失败不阻断聊天主链。
+
+截至 2026-07-13，本地实现与隐私测试完成，云端私有候选 `20260713-stage5-candidate-9` 和 AIDiag release `20260713-stage5-observability-1` 已打通 Prometheus、Loki 与 Tempo 管道。Prometheus target 为 UP，Tempo 已保存 AI-chat Actuator 请求 Trace，Loki 已通过无隐私 smoke event 验证采集；由于尚未对共享生产数据执行真实登录/SSE Chat 请求，三信号同一真实 Chat traceId 的最终验收保持未勾选。证据见 [`docs/verification/2026-07-13-stage5-observability.md`](docs/verification/2026-07-13-stage5-observability.md)。
 
 #### Stage 5.2：AIDiag AI-chat 诊断规则（必要 P0 + Trace P1）
 

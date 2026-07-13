@@ -29,6 +29,7 @@
 8. 两个仓库执行高风险 Secret 模式扫描，无匹配；`git diff --check` 无空白错误。
 9. GCP 主机只读前置审计：源 Nacos 2.1.1 running、restart count 0；`config_info=19`、`his_config_info=10`，3 个已移除旧表和 `config_tags_relation` 均为 0，`NULL tenant_id=0`、空/public namespace 冲突为 0；`MemAvailable=7610 MiB`、`/opt` 可用磁盘约 24.0 GiB，18848/19848 端口空闲。
 10. 候选数据库、数据库用户、容器和两个 named volume 均不存在；云端流式下载固定 commit 的官方 schema 得到 SHA-256 `00f3148b049cc6c5cbfbbb8c92ffa608076d3ba1b0bc3ef78d4660d3caf0de5b`，与脚本锁定值一致。
+11. 从提交 `bfaaf3a` 生成 AIDiag source archive，SHA-256 为 `e2f69d8fad5cbba8fd7d81c99983b06133dbf531dd2c9ad9024aeb4c9e0a77f4`；从 AI-chat 提交 `235c1c3` 生成候选 archive，SHA-256 为 `f5f3e62618e55815f235b324266627bcc1cd16ed5a57cecea68ad0e4d45851a7`。两个最终包在 Linux 临时目录复验 hash、Shell LF/语法、AIDiag 执行位和高风险 Secret 模式，全部通过。
 
 ## 对抗性审查修复
 

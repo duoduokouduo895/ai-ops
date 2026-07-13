@@ -70,7 +70,14 @@ report_supported() {
   local incident="$1"
   local report
   report="$(compose exec -T aidiag-backend curl -fsS "http://localhost:8080/api/v1/incidents/$incident/report" 2>/dev/null || true)"
-  [[ "$report" == *'"verificationStatus":"SUPPORTED"'* && "$report" == *'"primaryRootCauseCandidateId":"'* ]]
+  [[ -n "$report" ]] && printf '%s' "$report" | python3 -c '
+import json,sys
+try:
+    report=json.load(sys.stdin)
+except (json.JSONDecodeError, UnicodeDecodeError):
+    raise SystemExit(1)
+raise SystemExit(0 if report.get("verificationStatus") == "SUPPORTED" and report.get("primaryRootCauseCandidateId") else 1)
+'
 }
 
 incident_resolved() {

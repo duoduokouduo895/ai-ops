@@ -4,7 +4,7 @@ AIDiag 是一个面向 Java 服务的证据驱动型异常诊断平台。它接�
 
 平台当前重点接入 **AI-chat**：通过私有遥测网络监控候选实例，不侵入 AI-chat 业务代码，也不会把 Prompt、回答、用户 ID、会话 ID 或 Secret 写入运维遥测。
 
-> 当前状态：Stage 0～4、Stage 5.1～5.3 已完成。Stage 5.3 在独立 contract lab 中完成 4 类场景 × 5 轮闭环；这证明遥测契约和诊断流程可重复运行，不等同于真实 AI-chat 依赖故障的生产准确率。
+> 当前状态：Stage 0～4、Stage 5.1～5.3 已完成；Stage 5.4 的独立故障入口和只读 API 已发布，AI-chat Admin 仅作为服务存活时的辅助入口。Stage 5.3 的 4 类场景 × 5 轮结果证明遥测契约可重复运行，不等同于真实生产准确率。
 
 ## 核心能力
 
@@ -63,6 +63,7 @@ AI-chat 与 AIDiag 只通过遥测协议和告警协议连接。AIDiag 故障不
 | Stage 5.1 | 已完成 | AI-chat 指标、Trace、脱敏日志和隐私测试 |
 | Stage 5.2 | 已完成发布 | 四类 AI-chat 规则、Dashboard、自动建单传输验收 |
 | Stage 5.3 | 已完成 | 隔离 contract lab、四类证据闭环、恢复、DeepSeek 联动与评测归档 |
+| Stage 5.4 | 独立入口已发布 | Blackbox 外部探针、独立 Grafana 故障入口、鉴权只读 API；Admin 为辅助入口 |
 
 完整范围、门禁和遗留风险请阅读 [`AIDiag-V1-实施方案.md`](./AIDiag-V1-实施方案.md)。云端人工操作与回滚说明位于 [`云端实施操作手册.md`](./云端实施操作手册.md)。
 
@@ -113,7 +114,7 @@ Windows PowerShell：
 
 ## 下一步
 
-下一阶段是 Stage 5.4：先以只读 shadow mode 观察真实 AI-chat 告警和证据质量，补充非重叠样本、误报率和弃权率，再决定是否在现有 `frontend_admin` 中增加运维页面。正式切流前仍需完成 Nacos/Secret 收紧、Incident API 鉴权和 DNS/Nginx 变更评审。
+下一步是在不切换 DNS 的前提下继续 shadow mode：收集非重叠真实样本并统计误报、漏报、弃权与恢复时延；同时补容器启动早期日志采集和宿主机外部可用性监控。正式切流前仍需完成 Nacos/Secret 收紧、管理员端真实登录验收和 DNS/Nginx 变更评审。
 
 ## License
 

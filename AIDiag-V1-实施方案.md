@@ -1,6 +1,6 @@
 # AIDiag V1 实施方案
 
-> 文档版本：V1.5（Stage 5.3 隔离验收归档）
+> 文档版本：V1.6（Stage 5.4 独立故障入口收紧）
 > 更新日期：2026-07-13
 > 定位：面向 Java 微服务的只读智能诊断层。第一批真实接入目标为 AI-chat，并以受控 Fault Lab 完成故障评测。
 
@@ -430,7 +430,11 @@ GenAI 语义约定仍在演进。V1 使用稳定内部命名空间（如 aichat.
 
 Stage 3 的 Fault Lab 规则不得继续作为 AI-chat 规则入口。`RuleBasedDiagnosisService` 需要收敛为按 `(serviceName, alertName)` 选择的固定规则注册表，至少隔离 `FaultLabDiagnosisRuleProvider` 与 `AiChatDiagnosisRuleProvider`。PromQL/LogQL 只能来自代码或版本化配置中的固定模板，不能把告警 annotation 或任意 label 直接拼入查询。
 
-Stage 5 的展示面先使用 Grafana Dashboard。自研页面不是打通监控闭环的前置条件；只有真实 Incident 闭环验收后，才在现有 AI-chat `frontend_admin` 中增加“智能运维”模块。浏览器不得持有 AIDiag Stage 4 Operator Secret，AI 建议必须由受 ADMIN 保护的服务端 BFF 调用 AIDiag 私有 API。前端实施前还必须补齐 Incident API 鉴权、分页、筛选和审计。
+Stage 5 的主展示面必须位于 AI-chat 进程之外。独立 Grafana + Prometheus + Blackbox 是 break-glass 入口：即使 AI-chat JVM 未启动，也能从外部探测应用健康端点及 MySQL、Redis、RabbitMQ、Elasticsearch、Nacos 的 TCP 可达性。TCP 成功只代表网络和端口可达，不能直接宣称认证、协议或数据一致性正常。
+
+现有 AI-chat `frontend_admin` 中的“智能运维”模块只作为**辅助入口**：它依赖 AI-chat backend 的 ADMIN 鉴权和 BFF，因此只能覆盖“项目仍能启动但部分功能慢或异常”的场景，不能承担启动失败救援。浏览器不得持有 AIDiag Secret；BFF 使用文件型只读凭据访问 AIDiag，配置缺失时仅关闭集成，不得阻止 AI-chat 启动。Stage 4 Operator Secret 仍与只读 API Secret 分离，页面读取报告不触发模型、不执行自动修复。
+
+如果整台 GCP 主机、Docker daemon、主机网络或 Grafana 本身不可用，同机监控平面仍会一起失联。该层故障必须由宿主机外部的 uptime/云监控处理，不能由 Admin 页面或同机容器解决。
 
 ---
 
@@ -678,6 +682,18 @@ Smoke 功能使用 `POST /internal/smoke/telemetry`，且只在 `AIDIAG_SMOKE_EN
 
 该结果是**隔离遥测契约闭环验证**，不是生产准确率：实验服务没有真的耗尽 AI-chat R2DBC 连接池，也没有中断真实 Elasticsearch、RabbitMQ 或模型 Provider；同一轮的证据时间窗存在重叠，5 轮只能证明生命周期可重复。下一阶段必须采用 shadow mode 收集非重叠真实样本，统计误报、漏报、弃权和恢复时延后，才能讨论生产准确率。详细证据见 [`docs/verification/2026-07-13-stage5-3.md`](docs/verification/2026-07-13-stage5-3.md)。
 
+#### Stage 5.4：独立故障入口与只读展示（P0 + 必要 P1）
+
+- [x] [P0 独立入口] 部署固定版本 Blackbox Exporter，从 AI-chat JVM 外部探测应用 health 及 MySQL、Redis、RabbitMQ、Elasticsearch、Nacos TCP 可达性；探针仅加入必要私有 Docker 网络，不开放宿主机端口；
+- [x] [P0 告警展示] 增加 `AiChatProcessUnavailable`、`AiChatDependencyUnreachable` 和独立 Grafana Dashboard；未知外部故障只允许证据不足或无确定性规则，不能根据端口失败伪造内部根因；
+- [x] [P0 只读边界] Incident 列表、详情和 shadow summary 增加 Basic Auth、审计、精确筛选和分页上限；只读 Secret 与 Stage 4 Operator Secret 分离并以文件挂载；
+- [x] [P1 辅助页面] 在既有 `frontend_admin` 增加智能运维页面，由 ADMIN BFF 访问 AIDiag；配置错误采用 fail-open integration，即只关闭运维集成、不阻断 AI-chat 主应用启动；
+- [x] [发布收紧] Compose 使用不可变 release 的真实路径挂载配置；激活失败回滚时从旧 release 重建共享标签镜像，避免“软链接已回滚、镜像未回滚”；
+- [ ] [P1 启动证据] 安全采集 Docker stdout/stderr，覆盖 JVM 在文件 logger 初始化前失败的日志；不得直接把未受控 Docker socket 暴露给业务容器；
+- [ ] [P1 主机外监控] 增加位于 GCP 主机之外的 HTTPS/主机可用性检查，覆盖主机、Docker daemon、同机监控平面整体失联。
+
+门禁：AI-chat 停止时，Grafana/Prometheus/Blackbox 仍存活且应用探针变为 0；任一中间件网络不可达时仅对应 component 变为 0；未认证只读 API 返回 401，越界分页返回 400；Admin 集成失败不得影响聊天主链。当前独立入口云端验收见 [`docs/verification/2026-07-13-stage5-4.md`](docs/verification/2026-07-13-stage5-4.md)。
+
 总验收：AI-chat 的真实告警可生成引用其真实遥测证据的确定性诊断报告；数据采集不包含 Prompt、回答、用户/会话标识或 Secret；模型失败不影响规则报告；AIDiag 故障不阻断 AI-chat 主业务；部署和回滚均不要求手工上传 Jar。
 
 ---
@@ -696,7 +712,7 @@ Smoke 功能使用 `POST /internal/smoke/telemetry`，且只在 `AIDIAG_SMOKE_EN
 - [x] 完成阶段 0 验收；可进入最小 Fault Lab 的业务服务实现。
 - [x] 完成 AI-chat 独立 Docker 构建、私有 telemetry 网络和回滚基线；
 - [x] 完成 AI-chat 遥测隐私审查后再允许 Loki/Tempo 采集；
-- [x] 完成四类 AI-chat 规则和隔离故障验收；自研运维前端另立 Stage 5.4 子阶段，启动前先补 Incident API 鉴权与 shadow 数据质量门禁。
+- [x] 完成四类 AI-chat 规则、隔离故障验收和 Stage 5.4 独立故障入口；Admin 运维页只作为辅助入口，不与 AI-chat 共用救援职责。
 
 ---
 
@@ -716,4 +732,5 @@ Smoke 功能使用 `POST /internal/smoke/telemetry`，且只在 `AIDIAG_SMOKE_EN
 - [OpenTelemetry Java Agent 2.29.0](https://github.com/open-telemetry/opentelemetry-java-instrumentation/releases/tag/v2.29.0)；
 - [PostgreSQL 18.4](https://www.postgresql.org/docs/release/18.4/) 与 [pgvector 0.8.5 变更记录](https://github.com/pgvector/pgvector/blob/master/CHANGELOG.md)；
 - [Prometheus 3.13.1](https://github.com/prometheus/prometheus/releases/tag/v3.13.1)、[Alertmanager 0.33.1](https://github.com/prometheus/alertmanager/releases/tag/v0.33.1)；
+- [Blackbox Exporter 0.28.0](https://github.com/prometheus/blackbox_exporter/releases/tag/v0.28.0) 与 [Prometheus multi-target exporter 模式](https://prometheus.io/docs/guides/multi-target-exporter/)；
 - [Grafana 13.1.0](https://github.com/grafana/grafana/releases/tag/v13.1.0)、[Loki 3.7.3](https://github.com/grafana/loki/releases/tag/v3.7.3)、[Tempo 3.0.2](https://github.com/grafana/tempo/releases/tag/v3.0.2)、[Alloy 1.17.1](https://github.com/grafana/alloy/releases/tag/v1.17.1)。

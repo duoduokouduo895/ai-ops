@@ -45,16 +45,18 @@ fi
 ln -s "${release}" "${next_link}"
 mv -Tf "${next_link}" "${current_link}"
 
-set_compose_files "${current_link}"
-current_compose=(docker compose --project-directory "${current_link}" "${compose_files[@]}" \
-  --env-file "${current_link}/versions.env" --env-file "${runtime_dir}/.env.cloud")
+set_compose_files "${release}"
+# Use the immutable release path, not the stable symlink, for bind mounts. Otherwise Docker keeps
+# mounting the previous release directory and configuration-only changes never reach containers.
+current_compose=(docker compose --project-directory "${release}" "${compose_files[@]}" \
+  --env-file "${release}/versions.env" --env-file "${runtime_dir}/.env.cloud")
 if ! "${current_compose[@]}" up -d --remove-orphans --wait --wait-timeout 180; then
   if [[ -n "${previous_release}" ]]; then
     ln -s "${previous_release}" "${next_link}"
     mv -Tf "${next_link}" "${current_link}"
-    set_compose_files "${current_link}"
-    rollback_compose=(docker compose --project-directory "${current_link}" "${compose_files[@]}" \
-      --env-file "${current_link}/versions.env" --env-file "${runtime_dir}/.env.cloud")
+    set_compose_files "${previous_release}"
+    rollback_compose=(docker compose --project-directory "${previous_release}" "${compose_files[@]}" \
+      --env-file "${previous_release}/versions.env" --env-file "${runtime_dir}/.env.cloud")
     # The releases currently share local image tags. Rebuild from the restored source so rollback
     # cannot accidentally restart the failed release's image under the previous directory.
     "${rollback_compose[@]}" build aidiag-backend payment-service \

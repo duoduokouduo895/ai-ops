@@ -50,8 +50,11 @@ container='nacos-v3-candidate'
 docker inspect --format '{{range .HostConfig.Binds}}{{println .}}{{end}}' "${container}" \
   | grep -Fxq '/dev/null:/home/nacos/data/skills-data.zip:ro' \
   || { echo "Nacos built-in Skill bootstrap archive is not masked" >&2; exit 78; }
+docker inspect --format '{{range .HostConfig.Binds}}{{println .}}{{end}}' "${container}" \
+  | grep -Fxq '/dev/null:/home/nacos/data/agentspec-data.zip:ro' \
+  || { echo "Nacos built-in AgentSpec bootstrap archive is not masked" >&2; exit 78; }
 docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' "${container}" \
-  | grep -Fxq 'JAVA_OPT_EXT=-Dnacos.config.namespace.compatible.mode=false' \
+  | grep -Fxq 'JAVA_TOOL_OPTIONS=-Dnacos.config.namespace.compatible.mode=false' \
   || { echo "Nacos namespace compatibility mirroring is not disabled" >&2; exit 78; }
 
 ports="$(docker port "${container}")"
@@ -128,6 +131,8 @@ actual_history_count="$(mysql_candidate -e 'SELECT COUNT(*) FROM his_config_info
   || { echo "Candidate still contains legacy empty-namespace configuration" >&2; exit 78; }
 [[ "$(mysql_candidate -e "SELECT COUNT(*) FROM config_info WHERE group_id LIKE 'skill_enc.%'")" == 0 ]] \
   || { echo "Nacos built-in Skills unexpectedly polluted config_info" >&2; exit 78; }
+[[ "$(mysql_candidate -e "SELECT COUNT(*) FROM config_info WHERE group_id LIKE 'agentspec__enc.%'")" == 0 ]] \
+  || { echo "Nacos built-in AgentSpecs unexpectedly polluted config_info" >&2; exit 78; }
 role_rows="$(mysql_candidate -e "SELECT role FROM roles WHERE username='${client_username}' ORDER BY role")"
 [[ "${role_rows}" == 'ROLE_AICHAT_CANDIDATE' ]] \
   || { echo "Candidate client role assignment is not least-privilege" >&2; exit 78; }

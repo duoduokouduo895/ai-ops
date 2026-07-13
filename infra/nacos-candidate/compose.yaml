@@ -13,7 +13,7 @@ services:
       NACOS_APPLICATION_PORT: "8848"
       # V1 needs Config + Naming only. Disable the 2.x empty/public namespace
       # mirroring because the migration normalizes the old empty namespace once.
-      JAVA_OPT_EXT: -Dnacos.config.namespace.compatible.mode=false
+      JAVA_TOOL_OPTIONS: -Dnacos.config.namespace.compatible.mode=false
       SPRING_DATASOURCE_PLATFORM: mysql
       MYSQL_SERVICE_HOST: mysql
       MYSQL_SERVICE_PORT: "3306"
@@ -48,6 +48,7 @@ services:
       # Nacos 3.2.2 otherwise imports its bundled AI Skill marketplace into
       # config_info on first startup. V1 does not use the AI/Skill Registry.
       - /dev/null:/home/nacos/data/skills-data.zip:ro
+      - /dev/null:/home/nacos/data/agentspec-data.zip:ro
       - nacos3_candidate_logs:/home/nacos/logs
       - nacos3_candidate_data:/home/nacos/data
     ports:

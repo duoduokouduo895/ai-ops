@@ -51,9 +51,9 @@ else
     set -Eeuo pipefail
     printf '%s' aidiag-v1-production-identities >"${pending_secrets_dir}/.managed-by-aidiag-v1"
     printf '%s' aichat-production >"${pending_secrets_dir}/nacos_username"
-    openssl rand -hex 32 >"${pending_secrets_dir}/nacos_password"
+    openssl rand -hex 32 | tr -d '\n' >"${pending_secrets_dir}/nacos_password"
     printf '%s' aichat_production >"${pending_secrets_dir}/elasticsearch_username"
-    openssl rand -hex 32 >"${pending_secrets_dir}/elasticsearch_password"
+    openssl rand -hex 32 | tr -d '\n' >"${pending_secrets_dir}/elasticsearch_password"
     chown -R 10001:10001 "${pending_secrets_dir}"
     chmod 0700 "${pending_secrets_dir}"
     chmod 0400 "${pending_secrets_dir}"/* "${pending_secrets_dir}/.managed-by-aidiag-v1"
@@ -69,13 +69,32 @@ for name in nacos_username nacos_password elasticsearch_username elasticsearch_p
   path="${production_secrets_dir}/${name}"
   candidate_path="${candidate_secrets_dir}/${name}"
   [[ -f "${path}" && ! -L "${path}" && -s "${path}" \
-    && "$(stat -c '%a:%u:%g' "${path}")" == '400:10001:10001' ]] \
-    || { echo "Production Secret is missing or unsafe: ${name}" >&2; exit 68; }
+    && "$(stat -c '%a:%u:%g' "${path}")" == '400:10001:10001' \
+    && "$(wc -l <"${path}")" == 0 ]] \
+    || { echo "Production Secret is missing, unsafe, or multiline: ${name}" >&2; exit 68; }
   [[ -f "${candidate_path}" && -s "${candidate_path}" ]] \
     || { echo "Candidate rollback Secret is missing: ${name}" >&2; exit 68; }
   ! cmp --silent "${path}" "${candidate_path}" \
     || { echo "Production and candidate Secret must differ: ${name}" >&2; exit 78; }
 done
+
+assert_active_secret_mount() {
+  local container="$1"
+  local destination="$2"
+  local expected_source="$3"
+  local active_source
+  active_source="$(docker inspect --format "{{range .Mounts}}{{if eq .Destination \"${destination}\"}}{{.Source}}{{end}}{{end}}" "${container}")"
+  [[ -n "${active_source}" \
+    && "$(readlink -f "${active_source}")" == "$(readlink -f "${expected_source}")" ]] \
+    || {
+      echo "Configured candidate base does not match the active ${container} Secret mount; set the matching base directory explicitly" >&2
+      exit 70
+    }
+}
+assert_active_secret_mount nacos-v3-candidate /run/secrets/mysql.password \
+  "${nacos_secrets_dir}/mysql_password"
+assert_active_secret_mount elasticsearch-v9-candidate /run/secrets/elastic.password \
+  "${elasticsearch_secrets_dir}/elastic_password"
 
 tmp_dir="$(mktemp -d /opt/ai-chat/runtime/.production-identities.XXXXXX)"
 cleanup() { rm -rf -- "${tmp_dir}"; }

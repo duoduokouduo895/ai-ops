@@ -59,6 +59,24 @@ for container in nacos-v3-candidate elasticsearch-v9-candidate; do
     || { echo "Infrastructure candidate must be healthy with zero restarts: ${container}" >&2; exit 70; }
 done
 
+assert_active_secret_mount() {
+  local container="$1"
+  local destination="$2"
+  local expected_source="$3"
+  local active_source
+  active_source="$(docker inspect --format "{{range .Mounts}}{{if eq .Destination \"${destination}\"}}{{.Source}}{{end}}{{end}}" "${container}")"
+  [[ -n "${active_source}" \
+    && "$(readlink -f "${active_source}")" == "$(readlink -f "${expected_source}")" ]] \
+    || {
+      echo "Configured candidate base does not match the active ${container} Secret mount; set the matching base directory explicitly" >&2
+      exit 70
+    }
+}
+assert_active_secret_mount nacos-v3-candidate /run/secrets/mysql.password \
+  "${nacos_base}/runtime/.secrets/mysql_password"
+assert_active_secret_mount elasticsearch-v9-candidate /run/secrets/elastic.password \
+  "${elasticsearch_base}/runtime/.secrets/elastic_password"
+
 # shellcheck disable=SC1090
 source "${nacos_runtime_env}"
 # shellcheck disable=SC1090

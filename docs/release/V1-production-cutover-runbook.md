@@ -29,16 +29,21 @@ GCP 当前约 15 GiB 内存、无 Swap，且磁盘使用率已经达到 80%，V1
 2. 经确认后创建生产 Nacos/Elasticsearch 独立用户，权限与候选相同但凭据必须不同：
 
    ```bash
+   NACOS3_BASE_DIR=/opt/nacos3-candidate-clean2 \
+   ELASTICSEARCH9_BASE_DIR=/opt/elasticsearch9-candidate \
    AIDIAG_V1_PRODUCTION_IDENTITIES_CONFIRMED=PROVISION_DISTINCT_PRODUCTION_IDENTITIES \
      ./scripts/cloud-provision-v1-production-identities.sh /opt/aidiag/releases/<release>
    ```
 
    脚本只新增/验证身份和文件 Secret，不重启容器、不修改网络别名。失败后保留同一组受管 Secret，
-   可安全重试；如果目录不是由脚本创建则拒绝接管；
+   可安全重试；如果目录不是由脚本创建则拒绝接管。`NACOS3_BASE_DIR` / `ELASTICSEARCH9_BASE_DIR`
+   必须与当前容器实际挂载的 Secret 根目录一致，否则脚本 fail-closed，防止恢复候选后误用旧运行目录；
 3. 停止 AI-chat 候选后，使用带精确确认门禁和失败回滚的脚本重新创建已验收 Nacos 3 / Elasticsearch 9，
    使其同时具有候选别名和 `nacos-v3` / `elasticsearch-v9` 稳定别名：
 
    ```bash
+   NACOS3_BASE_DIR=/opt/nacos3-candidate-clean2 \
+   ELASTICSEARCH9_BASE_DIR=/opt/elasticsearch9-candidate \
    AIDIAG_V1_STABLE_ALIASES_CONFIRMED=PROMOTE_VERIFIED_CANDIDATES_TO_STABLE_ALIASES \
      ./scripts/cloud-promote-v1-stable-aliases.sh /opt/aidiag/releases/<release>
    ```

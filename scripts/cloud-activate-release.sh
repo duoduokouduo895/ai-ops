@@ -53,9 +53,13 @@ if ! "${current_compose[@]}" up -d --remove-orphans --wait --wait-timeout 180; t
     ln -s "${previous_release}" "${next_link}"
     mv -Tf "${next_link}" "${current_link}"
     set_compose_files "${current_link}"
-    docker compose --project-directory "${current_link}" "${compose_files[@]}" \
-      --env-file "${current_link}/versions.env" --env-file "${runtime_dir}/.env.cloud" \
-      up -d --remove-orphans --wait --wait-timeout 180 || true
+    rollback_compose=(docker compose --project-directory "${current_link}" "${compose_files[@]}" \
+      --env-file "${current_link}/versions.env" --env-file "${runtime_dir}/.env.cloud")
+    # The releases currently share local image tags. Rebuild from the restored source so rollback
+    # cannot accidentally restart the failed release's image under the previous directory.
+    "${rollback_compose[@]}" build aidiag-backend payment-service \
+      && "${rollback_compose[@]}" up -d --remove-orphans --wait --wait-timeout 180 \
+      || true
   fi
   echo "Activation failed; current link was restored when a previous release existed." >&2
   exit 1

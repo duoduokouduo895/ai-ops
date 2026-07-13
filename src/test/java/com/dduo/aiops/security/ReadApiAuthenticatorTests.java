@@ -6,8 +6,23 @@ import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 
 import org.junit.jupiter.api.Test;
+import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 
 class ReadApiAuthenticatorTests {
+
+    private final ApplicationContextRunner contextRunner = new ApplicationContextRunner()
+            .withUserConfiguration(ReadApiAuthenticator.class)
+            .withPropertyValues("aidiag.read-api.username=reader", "aidiag.read-api.password=test-password");
+
+    @Test
+    void springCanCreateTheAuthenticatorWithItsEnvironmentConstructor() {
+        contextRunner.run(context -> {
+            assertThat(context).hasNotFailed();
+            assertThat(context).hasSingleBean(ReadApiAuthenticator.class);
+            assertThat(context.getBean(ReadApiAuthenticator.class)
+                    .isAuthorized(basic("reader", "test-password"))).isTrue();
+        });
+    }
 
     @Test
     void acceptsOnlyTheConfiguredCredentials() {

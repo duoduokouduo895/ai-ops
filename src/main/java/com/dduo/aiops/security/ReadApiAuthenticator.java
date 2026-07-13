@@ -4,6 +4,7 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.Base64;
 
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Component;
 
@@ -14,6 +15,7 @@ public class ReadApiAuthenticator {
     private final byte[] expectedUsername;
     private final byte[] expectedPassword;
 
+    @Autowired
     public ReadApiAuthenticator(Environment environment) {
         this(environment.getProperty("aidiag.read-api.username", "aidiag-reader"),
                 environment.getProperty("aidiag.read-api.password", ""));

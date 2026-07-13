@@ -60,7 +60,8 @@ services:
       start_period: 120s
     read_only: true
     tmpfs:
-      - /tmp:size=128m,mode=1777
+      # RocksDB JNI extracts a native library below /tmp and must map it executable.
+      - /tmp:rw,exec,nosuid,nodev,size=128m,mode=1777
     mem_limit: 2560m
     cpus: 1.50
     pids_limit: 512

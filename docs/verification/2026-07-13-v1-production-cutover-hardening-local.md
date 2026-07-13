@@ -10,7 +10,10 @@
 3. 原激活脚本只要求一个布尔确认，没有绑定旧写端停机、数据库备份或具体 release；
 4. `ai_agent_db` 当前 Flyway 为 V4，production 首启将执行 V5，首次失败不能由 GCP 自动恢复外部旧实例；
 5. 主机约 15 GiB 内存、无 Swap、磁盘使用率 80%，再复制一套 Nacos 3 + Elasticsearch 9 会明显
-   压缩应用和观测栈余量。
+   压缩应用和观测栈余量；
+6. Nacos 候选曾从默认目录恢复到 `/opt/nacos3-candidate-clean2`，原 Phase A 脚本仍默认读取旧目录；
+   如果直接执行会使用与活动容器不一致的数据库和 Secret；
+7. AI-chat `--prepare` 没有导出 Compose 必需的 `AICHAT_RELEASE`，会在真正门禁前渲染失败。
 
 因此采用“已验收候选受控晋升”的最小方案：同一 Nacos 3 / Elasticsearch 9 容器保留候选别名，
 额外增加稳定生产别名；生产使用独立 least-privilege 身份，旧 Nacos 2 / Elasticsearch 8 保持不变。
@@ -24,8 +27,11 @@
 - release 必须 root-owned、不可被 group/world 写入且不含 symlink；
 - 数据库备份脚本只接受当前 Flyway V4，使用 `--single-transaction` 并在落盘后做 gzip/SHA-256 校验；
 - 生产身份脚本需要精确确认字符串，原子创建文件 Secret，Nacos 与 Elasticsearch 权限均按白名单配置；
+- 身份创建与别名晋升会核对配置目录和活动容器的 Secret mount；目录漂移时 fail-closed。新生产密码
+  固定为无换行的 64 位十六进制，预检也拒绝 multiline Secret；
 - 稳定别名晋升脚本要求生产身份已存在且 AI-chat 候选已停止，按中间件分步重建、逐步复验；失败时
   根据当前容器 Compose label 自动恢复原 release，不删除数据库或 volumes；
+- AI-chat `--prepare` 从受校验 release 目录名确定并导出 `AICHAT_RELEASE`，不再依赖操作者临时注入；
 - 首次生产失败的日志明确提示需要按手册重启外部旧实例，不再误报“已恢复”。
 
 ## 验证结果
@@ -38,12 +44,24 @@
   前后均不存在生产 Secret 目录，验证过程无状态修改；
 - 随后已从已校验 release 安装 root-owned、mode 600 的 `production.env`，固定 cutover id 并保持
   `AICHAT_PRODUCTION_CONFIRMED=false`；`--prepare` 以 68 在首个缺失生产 Secret 处拒绝，未启动容器；
-- 线上 Nacos 3、Elasticsearch 9、AI-chat 候选、旧 Nacos 2 和旧 Elasticsearch 8 均未重启，Nginx/DNS 未修改。
+- Phase A 首次身份创建因旧默认 Nacos 运行目录而失败；确认 Nacos/Elasticsearch 均无半成品身份后，
+  修复活动 mount 绑定，并仅原子去除两份尚未使用生产密码的末尾换行，随机值本身未更换；
+- 生产身份创建与幂等重跑通过：Nacos 仅有 config read、naming read/write 两项权限；Elasticsearch
+  对 allowlist 外索引返回 403；
+- 停止 AI-chat 候选后，Nacos 3 与 Elasticsearch 9 已增加 `nacos-v3` / `elasticsearch-v9` 稳定别名；
+  两者重建后均为 `healthy/restart 0`，旧 Nacos 2 / Elasticsearch 8 restart 仍为 0；
+- AI-chat 候选恢复后真实 Guest SSE 返回 200，事件包含 metadata/status/message，持久化 2 条消息；
+  Prometheus target 为 1、Tempo trace 返回 200、Loki 命中同一 trace，Prompt/回答未进入遥测，临时
+  Guest、conversation、message、Redis/JTI 和 Elasticsearch 派生数据精确清理通过；
+- 修复 AI-chat release 变量后，`20260714-v1-production-cutover-gate-r2` 的只读 `--prepare` 通过，
+  manifest SHA-256 为 `c9a7e2bdd2873b7a29ae266e7f7cfea65c8fb78bd0f6e3a539cbe6befe515ae9`；
+- Phase A 非敏感证据已保存到
+  `/opt/aidiag/evidence/v1-phase-a/20260713T221201Z.env`（root:root、mode 600）；Nginx/DNS 未修改，
+  production Project 仍不存在，`AICHAT_PRODUCTION_CONFIRMED=false`。
 
-## 尚未执行
+## Phase A 完成边界与尚未执行
 
-生产身份创建、稳定别名生效需要短暂重新创建两个候选中间件，属于生产安全配置和维护窗口动作；
-晋升脚本目前只完成语法、Compose 渲染、负向门禁及原 release 自动发现验证；云端正确识别 Nacos
-原 release `20260713-nacos3-candidate-gate-r5` 与 Elasticsearch 原 release
-`20260713-elasticsearch9-ik-candidate-r2`，未执行确认分支。
-必须在用户确认后执行。`--ready`、Flyway V5、production 启动、Nginx/TLS、DNS 和外部监控也尚未执行。
+Phase A 已完成，但这不代表正式发布。下一步进入维护窗口前必须再次取得确认，再停止外部旧 AI-chat
+写端、生成绑定 cutover id 的停写证据、备份并校验 `ai_agent_db`、设置人工批准证据并执行 `--ready`。
+Flyway V5、production 启动、真实生产登录/SSE/知识库/OSS/RAG 回归、Nginx/TLS、DNS 切换、30 分钟
+观察和回滚演练均尚未执行。首次 GCP production 失败仍需要人工恢复外部旧实例。

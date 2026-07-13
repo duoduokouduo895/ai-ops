@@ -17,8 +17,10 @@ GCP 当前约 15 GiB 内存、无 Swap，且磁盘使用率已经达到 80%，V1
 - AI-chat 候选：166 项构建测试、真实 Guest SSE、消息持久化、Nacos 注册、Prometheus/Loki/Tempo 关联通过；
 - MySQL `ai_agent_db.flyway_schema_history` 当前成功版本为 V4，V1 production 首启将执行 V5 outbox 迁移；
 - GCP 已安装 root-owned、mode 600 的 `/opt/ai-chat/runtime/production.env`，cutover id 为
-  `20260713-v1-mvp-cutover-1` 且确认值保持 `false`；生产 Secret、生产 Compose Project 和本机旧
-  production release 仍不存在；
+  `20260713-v1-mvp-cutover-1` 且确认值保持 `false`；生产 Secret 和最小权限身份已经创建，
+  `nacos-v3` / `elasticsearch-v9` 稳定别名已经生效，production Compose Project 仍不存在；
+- Phase A 已通过真实 Guest SSE、Prometheus/Loki/Tempo 关联、隐私与精确清理复验，AI-chat 候选已恢复
+  `healthy/restart 0`；只读 `--prepare` 已对 release `20260714-v1-production-cutover-gate-r2` 通过；
 - Nginx 与 DNS 尚未指向新 AI-chat，旧线上实例仍是首次切换失败时的唯一应用回滚链。
 
 ## 3. 分阶段切换

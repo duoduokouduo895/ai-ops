@@ -11,6 +11,9 @@ services:
       PREFER_HOST_MODE: hostname
       NACOS_DEPLOYMENT_TYPE: merged
       NACOS_APPLICATION_PORT: "8848"
+      # V1 needs Config + Naming only. Disable the 2.x empty/public namespace
+      # mirroring because the migration normalizes the old empty namespace once.
+      JAVA_OPT_EXT: -Dnacos.config.namespace.compatible.mode=false
       SPRING_DATASOURCE_PLATFORM: mysql
       MYSQL_SERVICE_HOST: mysql
       MYSQL_SERVICE_PORT: "3306"
@@ -42,6 +45,9 @@ services:
         target: nacos.identity-value
     volumes:
       - ./entrypoint.sh:/opt/aidiag/nacos-candidate-entrypoint.sh:ro
+      # Nacos 3.2.2 otherwise imports its bundled AI Skill marketplace into
+      # config_info on first startup. V1 does not use the AI/Skill Registry.
+      - /dev/null:/home/nacos/data/skills-data.zip:ro
       - nacos3_candidate_logs:/home/nacos/logs
       - nacos3_candidate_data:/home/nacos/data
     ports:
@@ -86,9 +92,9 @@ networks:
 
 volumes:
   nacos3_candidate_logs:
-    name: nacos3-candidate-logs
+    name: ${NACOS3_LOGS_VOLUME:-nacos3-candidate-logs}
   nacos3_candidate_data:
-    name: nacos3-candidate-data
+    name: ${NACOS3_DATA_VOLUME:-nacos3-candidate-data}
 
 secrets:
   mysql_password:

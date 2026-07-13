@@ -40,6 +40,9 @@ mysql_container="${NACOS3_MYSQL_CONTAINER:-mysql}"
 candidate_container="nacos-v3-candidate"
 candidate_db="${NACOS3_DB_NAME:-nacos_v3_candidate}"
 candidate_db_user="${NACOS3_DB_USER:-nacos_v3_candidate}"
+compose_project="${NACOS3_COMPOSE_PROJECT:-nacos3-candidate}"
+logs_volume="${NACOS3_LOGS_VOLUME:-nacos3-candidate-logs}"
+data_volume="${NACOS3_DATA_VOLUME:-nacos3-candidate-data}"
 http_port="${NACOS3_HTTP_PORT:-18848}"
 grpc_port="${NACOS3_GRPC_PORT:-19848}"
 aichat_secret_dir="${AICHAT_CANDIDATE_SECRETS_DIR:-/opt/ai-chat/runtime/.secrets/candidate}"
@@ -47,6 +50,10 @@ aichat_secret_dir="${AICHAT_CANDIDATE_SECRETS_DIR:-/opt/ai-chat/runtime/.secrets
 for value in "${candidate_db}" "${candidate_db_user}"; do
   [[ "${value}" =~ ^[a-z][a-z0-9_]{2,62}$ ]] \
     || { echo "Candidate database names must match ^[a-z][a-z0-9_]{2,62}$" >&2; exit 69; }
+done
+for value in "${compose_project}" "${logs_volume}" "${data_volume}"; do
+  [[ "${value}" =~ ^[a-z0-9][a-z0-9_.-]{2,62}$ ]] \
+    || { echo "Candidate Docker names must match ^[a-z0-9][a-z0-9_.-]{2,62}$" >&2; exit 69; }
 done
 for value in "${http_port}" "${grpc_port}"; do
   [[ "${value}" =~ ^[0-9]+$ ]] && (( value >= 1024 && value <= 65535 )) \
@@ -92,7 +99,7 @@ for network in middleware-net nacos-net; do
 done
 docker inspect "${candidate_container}" >/dev/null 2>&1 \
   && { echo "Candidate container already exists; use verify/start/stop instead of preparing again" >&2; exit 73; }
-for volume in nacos3-candidate-logs nacos3-candidate-data; do
+for volume in "${logs_volume}" "${data_volume}"; do
   docker volume inspect "${volume}" >/dev/null 2>&1 \
     && { echo "Candidate volume already exists: ${volume}" >&2; exit 73; }
 done
@@ -169,6 +176,9 @@ runtime_env="${runtime_dir}/candidate.env"
 cat >"${runtime_env}.tmp" <<EOF
 NACOS3_DB_NAME=${candidate_db}
 NACOS3_DB_USER=${candidate_db_user}
+NACOS3_COMPOSE_PROJECT=${compose_project}
+NACOS3_LOGS_VOLUME=${logs_volume}
+NACOS3_DATA_VOLUME=${data_volume}
 NACOS3_HTTP_PORT=${http_port}
 NACOS3_GRPC_PORT=${grpc_port}
 NACOS3_SECRETS_DIR=${secrets_dir}
@@ -177,7 +187,7 @@ EOF
 chmod 0600 "${runtime_env}.tmp"
 mv -f "${runtime_env}.tmp" "${runtime_env}"
 
-compose=(docker compose --project-name nacos3-candidate --project-directory "${candidate_dir}" \
+compose=(docker compose --project-name "${compose_project}" --project-directory "${candidate_dir}" \
   -f "${candidate_dir}/compose.yaml" --env-file "${versions_file}" --env-file "${runtime_env}")
 candidate_started=false
 on_error() {
@@ -234,6 +244,10 @@ for table in "${migration_tables[@]}"; do
     mysql_root "${candidate_db}" <"${table_dump}"
     gzip -9 "${table_dump}"
   fi
+  if [[ "$(mysql_root -e "SELECT COUNT(*) FROM information_schema.columns WHERE table_schema='${candidate_db}' AND table_name='${table}' AND column_name='tenant_id'")" == 1 ]]; then
+    mysql_root "${candidate_db}" -e \
+      "UPDATE \`${table}\` SET tenant_id='public' WHERE tenant_id=''"
+  fi
   target_count="$(table_count "${candidate_db}" "${table}")"
   [[ "${target_count}" == "${count}" ]] \
     || { echo "Row-count mismatch for ${table}: source=${count}, target=${target_count}" >&2; exit 72; }
@@ -244,6 +258,8 @@ for table in users roles permissions; do
 done
 
 printf '%s' "${source_restart_count}" >"${runtime_dir}/source-nacos-restart-count"
+printf '%s' "${source_config_count}" >"${runtime_dir}/source-config-info-count"
+printf '%s' "$(table_count "${source_db}" his_config_info)" >"${runtime_dir}/source-his-config-info-count"
 printf '%s' "${timestamp}" >"${runtime_dir}/prepared-at"
 candidate_started=true
 "${compose[@]}" up -d nacos3-candidate

@@ -11,7 +11,11 @@ runtime_env="${NACOS3_BASE_DIR:-/opt/nacos3-candidate}/runtime/candidate.env"
 candidate_dir="${release}/infra/nacos-candidate"
 [[ -f "${runtime_env}" && -f "${candidate_dir}/compose.yaml" ]] \
   || { echo "Candidate has not been prepared" >&2; exit 66; }
-compose=(docker compose --project-name nacos3-candidate --project-directory "${candidate_dir}" \
+set -a
+# shellcheck disable=SC1090
+source "${runtime_env}"
+set +a
+compose=(docker compose --project-name "${NACOS3_COMPOSE_PROJECT:-nacos3-candidate}" --project-directory "${candidate_dir}" \
   -f "${candidate_dir}/compose.yaml" --env-file "${release}/versions.env" --env-file "${runtime_env}")
 "${compose[@]}" config --quiet
 "${compose[@]}" up -d nacos3-candidate

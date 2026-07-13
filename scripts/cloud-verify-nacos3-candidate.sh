@@ -15,7 +15,9 @@ runtime_env="${runtime_dir}/candidate.env"
 secrets_dir="${runtime_dir}/.secrets"
 candidate_dir="${release}/infra/nacos-candidate"
 versions_file="${release}/versions.env"
-[[ -f "${runtime_env}" && -f "${candidate_dir}/compose.yaml" && -f "${versions_file}" ]] \
+[[ -f "${runtime_env}" && -f "${candidate_dir}/compose.yaml" && -f "${versions_file}" \
+  && -f "${runtime_dir}/source-config-info-count" \
+  && -f "${runtime_dir}/source-his-config-info-count" ]] \
   || { echo "Nacos candidate runtime or release files are missing" >&2; exit 66; }
 [[ "$(stat -c '%a' "${runtime_env}")" == 600 ]] \
   || { echo "Candidate runtime env must use mode 600" >&2; exit 68; }
@@ -45,6 +47,12 @@ container='nacos-v3-candidate'
   || { echo "Nacos candidate restarted unexpectedly" >&2; exit 70; }
 [[ "$(docker inspect --format '{{.Config.Image}}' "${container}")" == "${expected_image}" ]] \
   || { echo "Nacos candidate is not using the reviewed image digest" >&2; exit 70; }
+docker inspect --format '{{range .HostConfig.Binds}}{{println .}}{{end}}' "${container}" \
+  | grep -Fxq '/dev/null:/home/nacos/data/skills-data.zip:ro' \
+  || { echo "Nacos built-in Skill bootstrap archive is not masked" >&2; exit 78; }
+docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' "${container}" \
+  | grep -Fxq 'JAVA_OPT_EXT=-Dnacos.config.namespace.compatible.mode=false' \
+  || { echo "Nacos namespace compatibility mirroring is not disabled" >&2; exit 78; }
 
 ports="$(docker port "${container}")"
 grep -Fq "127.0.0.1:${NACOS3_HTTP_PORT}" <<<"${ports}" \
@@ -108,6 +116,18 @@ mysql_candidate() {
   docker exec -i -e MYSQL_PWD="$(cat "${secrets_dir}/mysql_password")" "${mysql_container}" \
     mysql --protocol=socket -u"${NACOS3_DB_USER}" --batch --skip-column-names "${NACOS3_DB_NAME}" "$@"
 }
+expected_config_count="$(cat "${runtime_dir}/source-config-info-count")"
+expected_history_count="$(cat "${runtime_dir}/source-his-config-info-count")"
+actual_config_count="$(mysql_candidate -e 'SELECT COUNT(*) FROM config_info')"
+actual_history_count="$(mysql_candidate -e 'SELECT COUNT(*) FROM his_config_info')"
+[[ "${actual_config_count}" == "${expected_config_count}" ]] \
+  || { echo "Candidate config_info count drifted: expected=${expected_config_count}, actual=${actual_config_count}" >&2; exit 78; }
+[[ "${actual_history_count}" == "${expected_history_count}" ]] \
+  || { echo "Candidate his_config_info count drifted: expected=${expected_history_count}, actual=${actual_history_count}" >&2; exit 78; }
+[[ "$(mysql_candidate -e "SELECT COUNT(*) FROM config_info WHERE tenant_id=''")" == 0 ]] \
+  || { echo "Candidate still contains legacy empty-namespace configuration" >&2; exit 78; }
+[[ "$(mysql_candidate -e "SELECT COUNT(*) FROM config_info WHERE group_id LIKE 'skill_enc.%'")" == 0 ]] \
+  || { echo "Nacos built-in Skills unexpectedly polluted config_info" >&2; exit 78; }
 role_rows="$(mysql_candidate -e "SELECT role FROM roles WHERE username='${client_username}' ORDER BY role")"
 [[ "${role_rows}" == 'ROLE_AICHAT_CANDIDATE' ]] \
   || { echo "Candidate client role assignment is not least-privilege" >&2; exit 78; }

@@ -41,7 +41,7 @@ for secret in mysql_password auth_token identity_key identity_value admin_passwo
   [[ -s "${path}" && "$(stat -c '%a' "${path}")" == 600 ]] \
     || { echo "Candidate secret is missing, empty, or has unsafe mode: ${secret}" >&2; exit 68; }
 done
-for volume in nacos3-candidate-logs nacos3-candidate-data; do
+for volume in "${NACOS3_LOGS_VOLUME:-nacos3-candidate-logs}" "${NACOS3_DATA_VOLUME:-nacos3-candidate-data}"; do
   docker volume inspect "${volume}" >/dev/null \
     || { echo "Retained candidate volume is missing: ${volume}" >&2; exit 70; }
 done
@@ -68,7 +68,7 @@ source_restart_count="$(cat "${runtime_dir}/source-nacos-restart-count")"
 [[ "$(docker inspect --format '{{.RestartCount}}' nacos)" == "${source_restart_count}" ]] \
   || { echo "Source Nacos restart count changed after initial preparation" >&2; exit 70; }
 
-compose=(docker compose --project-name nacos3-candidate --project-directory "${candidate_dir}" \
+compose=(docker compose --project-name "${NACOS3_COMPOSE_PROJECT:-nacos3-candidate}" --project-directory "${candidate_dir}" \
   -f "${candidate_dir}/compose.yaml" --env-file "${versions_file}" --env-file "${runtime_env}")
 "${compose[@]}" config --quiet
 install -d -m 0700 "${evidence_dir}"

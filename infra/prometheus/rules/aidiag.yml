@@ -148,3 +148,27 @@ groups:
         annotations:
           summary: Isolated AI-chat search unavailable contract is active
           description: Stage 5.3 authenticated contract state; never a production health signal.
+
+  - name: ai-chat-external-availability
+    rules:
+      - alert: AiChatProcessUnavailable
+        expr: probe_success{job="blackbox-ai-chat",target_kind="application"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          service_name: ai-chat-candidate
+          evidence_source: external_probe
+        annotations:
+          summary: AI-chat is unreachable from the independent monitoring plane
+          description: The external health probe has failed for two minutes. Check dependency probes and startup logs before assigning a root cause.
+
+      - alert: AiChatDependencyUnreachable
+        expr: probe_success{job="blackbox-ai-chat",target_kind="dependency"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          service_name: ai-chat-candidate
+          evidence_source: external_probe
+        annotations:
+          summary: "AI-chat dependency {{ $labels.component }} is unreachable"
+          description: "The monitoring network cannot establish a TCP connection to {{ $labels.component }}. This proves path unreachability, not the dependency's internal root cause."

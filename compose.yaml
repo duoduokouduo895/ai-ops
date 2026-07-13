@@ -98,6 +98,28 @@ services:
     security_opt:
       - no-new-privileges:true
 
+  blackbox-exporter:
+    image: ${BLACKBOX_EXPORTER_IMAGE:?Load versions.env before running Compose}
+    restart: unless-stopped
+    command:
+      - --config.file=/etc/blackbox_exporter/blackbox.yml
+    volumes:
+      - ./infra/blackbox/blackbox.yml:/etc/blackbox_exporter/blackbox.yml:ro
+    expose:
+      - "9115"
+    networks:
+      - telemetry
+      - middleware
+      - nacos
+    mem_limit: 128m
+    cpus: 0.25
+    pids_limit: 128
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+    security_opt:
+      - no-new-privileges:true
+
   aidiag-integration-test:
     image: maven:3.9.16-eclipse-temurin-21@sha256:0bef3f122ac7c0928b2fbcdf444f98cbd2db0ef7a1193bfa121cd70fa22221ef
     profiles: ["test"]
@@ -459,6 +481,12 @@ networks:
   faultlab:
     name: aidiag-faultlab
     internal: true
+  middleware:
+    external: true
+    name: middleware-net
+  nacos:
+    external: true
+    name: nacos-net
 
 volumes:
   postgres_data:

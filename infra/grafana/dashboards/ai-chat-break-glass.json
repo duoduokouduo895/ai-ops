@@ -1,0 +1,65 @@
+{
+  "annotations": {"list": []},
+  "editable": false,
+  "graphTooltip": 1,
+  "links": [],
+  "panels": [
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "mappings": [{"options": {"0": {"color": "red", "text": "不可达"}, "1": {"color": "green", "text": "正常"}}, "type": "value"}], "thresholds": {"mode": "absolute", "steps": [{"color": "red", "value": 0}, {"color": "green", "value": 1}]}}, "overrides": []},
+      "gridPos": {"h": 7, "w": 16, "x": 0, "y": 0},
+      "id": 1,
+      "options": {"colorMode": "background", "graphMode": "none", "justifyMode": "auto", "orientation": "horizontal", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "showPercentChange": false, "textMode": "name", "wideLayout": true},
+      "targets": [{"editorMode": "code", "expr": "probe_success{job=\"blackbox-ai-chat\"}", "instant": true, "legendFormat": "{{component}}", "range": false, "refId": "A"}],
+      "title": "独立可达性探针",
+      "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"unit": "s", "min": 0}, "overrides": []},
+      "gridPos": {"h": 7, "w": 8, "x": 16, "y": 0},
+      "id": 2,
+      "options": {"legend": {"calcs": ["lastNotNull", "max"], "displayMode": "list", "placement": "bottom", "showLegend": true}, "tooltip": {"mode": "multi", "sort": "desc"}},
+      "targets": [{"editorMode": "code", "expr": "probe_duration_seconds{job=\"blackbox-ai-chat\"}", "legendFormat": "{{component}}", "range": true, "refId": "A"}],
+      "title": "探针耗时",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {}, "overrides": []},
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 7},
+      "id": 3,
+      "options": {"cellHeight": "sm", "showHeader": true},
+      "targets": [{"editorMode": "code", "expr": "ALERTS{alertname=~\"AiChatProcessUnavailable|AiChatDependencyUnreachable\",alertstate=\"firing\"}", "format": "table", "instant": true, "legendFormat": "__auto", "range": false, "refId": "A"}],
+      "title": "当前外部告警",
+      "type": "table"
+    },
+    {
+      "datasource": {"type": "loki", "uid": "loki"},
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 7},
+      "id": 4,
+      "options": {"dedupStrategy": "none", "enableInfiniteScrolling": false, "enableLogDetails": true, "prettifyLogMessage": false, "showCommonLabels": false, "showLabels": false, "showTime": true, "sortOrder": "Descending", "wrapLogMessage": true},
+      "targets": [{"editorMode": "code", "expr": "{service_name=\"ai-chat-candidate\"} | json | level=~\"ERROR|WARN\"", "queryType": "range", "refId": "A"}],
+      "title": "最近启动与运行错误",
+      "type": "logs"
+    },
+    {
+      "gridPos": {"h": 4, "w": 24, "x": 0, "y": 15},
+      "id": 5,
+      "options": {"content": "该页面属于独立运维面，不依赖 AI-chat Admin。应用探针失败时先看中间件探针：单个依赖不可达说明网络路径或依赖端口异常；全部依赖正常但应用不可达时，再检查启动日志。探针只能证明可达性，不能直接证明中间件内部根因。", "mode": "markdown"},
+      "title": "判断顺序",
+      "type": "text"
+    }
+  ],
+  "preload": false,
+  "refresh": "15s",
+  "schemaVersion": 42,
+  "tags": ["aidiag", "ai-chat", "break-glass"],
+  "templating": {"list": []},
+  "time": {"from": "now-1h", "to": "now"},
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "AI-chat 独立故障入口",
+  "uid": "ai-chat-break-glass",
+  "version": 1
+}

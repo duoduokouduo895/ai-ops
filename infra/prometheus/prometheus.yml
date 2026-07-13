@@ -31,6 +31,33 @@ scrape_configs:
         labels:
           service_name: ai-chat-candidate
 
+  # Runs outside the AI-chat JVM, so it remains useful when the application
+  # cannot start. The component label is fixed here and never user-controlled.
+  - job_name: blackbox-ai-chat
+    metrics_path: /probe
+    static_configs:
+      - targets: [http://ai-chat-candidate:9091/actuator/health]
+        labels: {module: http_health, component: application, target_kind: application, service_name: ai-chat-candidate}
+      - targets: [mysql:3306]
+        labels: {module: tcp_connect, component: mysql, target_kind: dependency, service_name: ai-chat-candidate}
+      - targets: [redis:6379]
+        labels: {module: tcp_connect, component: redis, target_kind: dependency, service_name: ai-chat-candidate}
+      - targets: [rabbitmq:5672]
+        labels: {module: tcp_connect, component: rabbitmq, target_kind: dependency, service_name: ai-chat-candidate}
+      - targets: [elasticsearch:9200]
+        labels: {module: tcp_connect, component: elasticsearch, target_kind: dependency, service_name: ai-chat-candidate}
+      - targets: [nacos:8848]
+        labels: {module: tcp_connect, component: nacos, target_kind: dependency, service_name: ai-chat-candidate}
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - source_labels: [module]
+        target_label: __param_module
+      - target_label: __address__
+        replacement: blackbox-exporter:9115
+
   - job_name: ai-chat-stage5-lab
     metrics_path: /actuator/prometheus
     static_configs:

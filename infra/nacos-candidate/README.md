@@ -11,6 +11,7 @@
 - `users`、`roles`、`permissions` 不从 Nacos 2 复制；
 - 旧版 `config_info_aggr`、`config_info_beta`、`config_info_tag` 只要存在非空数据就拒绝迁移；
 - AI-chat 候选用户仅拥有 `public:DEFAULT_GROUP:config/*` 的读权限，以及 `public:DEFAULT_GROUP:naming/*` 的读写权限；
+- AI-chat 专用凭据副本使用 `10001:10001` 和 mode `0400`，因为 Docker Compose 的 file Secret 会保留宿主机所有权，不能依赖 overlay 中的 `uid/gid/mode`；
 - 8848/9848 只映射到 `127.0.0.1`，容器同时加入 AI-chat 所需的私有网络；
 - Nacos 上游启动脚本会开启 `set -x`，本目录的 wrapper 使用 `BASH_XTRACEFD` 丢弃 xtrace，避免 Secret 进入 Docker 日志；
 - 停止脚本不删除数据库、备份、Secret 或 volumes。任何清理动作都需要另行评审与确认。

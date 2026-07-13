@@ -167,8 +167,10 @@ api_result "${tmp_dir}/naming-rw.json" -X POST "${api_base}/permission" \
 
 aichat_secret_dir="${AICHAT_CANDIDATE_SECRETS_DIR:-/opt/ai-chat/runtime/.secrets/candidate}"
 install -d -m 0700 "${aichat_secret_dir}"
-install -m 0600 "${secrets_dir}/client_username" "${aichat_secret_dir}/nacos_username"
-install -m 0600 "${secrets_dir}/client_password" "${aichat_secret_dir}/nacos_password"
+install -o 10001 -g 10001 -m 0400 \
+  "${secrets_dir}/client_username" "${aichat_secret_dir}/nacos_username"
+install -o 10001 -g 10001 -m 0400 \
+  "${secrets_dir}/client_password" "${aichat_secret_dir}/nacos_password"
 
 "${release}/scripts/cloud-verify-nacos3-candidate.sh" "${release}" \
   | tee "${evidence_dir}/verification.txt"

@@ -37,6 +37,13 @@ for secret in mysql_password auth_token identity_key identity_value admin_passwo
   [[ -s "${path}" && "$(stat -c '%a' "${path}")" == 600 ]] \
     || { echo "Candidate secret is missing, empty, or has unsafe mode: ${secret}" >&2; exit 68; }
 done
+aichat_secret_dir="${AICHAT_CANDIDATE_SECRETS_DIR:-/opt/ai-chat/runtime/.secrets/candidate}"
+for secret in nacos_username nacos_password; do
+  path="${aichat_secret_dir}/${secret}"
+  [[ -f "${path}" && ! -L "${path}" && -s "${path}" \
+    && "$(stat -c '%a:%u:%g' "${path}")" == '400:10001:10001' ]] \
+    || { echo "AI-chat candidate Secret has unsafe ownership or mode: ${secret}" >&2; exit 68; }
+done
 
 container='nacos-v3-candidate'
 [[ "$(docker inspect --format '{{.State.Running}}' "${container}" 2>/dev/null || true)" == true ]] \

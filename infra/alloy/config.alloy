@@ -1,194 +1,194 @@
 logging {
-  level  = "info"
-  format = "logfmt"
+	level  = "info"
+	format = "logfmt"
 }
 
 local.file_match "aidiag_logs" {
-  path_targets = [
-    {
-      "__path__"     = "/var/log/aidiag/*.log",
-      "job"          = "aidiag",
-      "service_name" = "aidiag",
-      "environment"  = sys.env("DEPLOYMENT_ENVIRONMENT"),
-    },
-  ]
-  sync_period = "10s"
+	path_targets = [
+		{
+			"__path__"     = "/var/log/aidiag/*.log",
+			"job"          = "aidiag",
+			"service_name" = "aidiag",
+			"environment"  = sys.env("DEPLOYMENT_ENVIRONMENT"),
+		},
+	]
+	sync_period = "10s"
 }
 
 loki.source.file "aidiag_logs" {
-  targets    = local.file_match.aidiag_logs.targets
-  forward_to = [loki.process.aidiag_logs.receiver]
+	targets    = local.file_match.aidiag_logs.targets
+	forward_to = [loki.process.aidiag_logs.receiver]
 }
 
 loki.process "aidiag_logs" {
-  stage.json {
-    expressions = {
-      level      = "level",
-      trace_id   = "traceId",
-      span_id    = "spanId",
-      request_id = "requestId",
-    }
-  }
+	stage.json {
+		expressions = {
+			level      = "level",
+			trace_id   = "traceId",
+			span_id    = "spanId",
+			request_id = "requestId",
+		}
+	}
 
-  stage.labels {
-    values = {
-      level = "",
-    }
-  }
+	stage.labels {
+		values = {
+			level = "",
+		}
+	}
 
-  stage.structured_metadata {
-    values = {
-      trace_id   = "",
-      span_id    = "",
-      request_id = "",
-    }
-  }
+	stage.structured_metadata {
+		values = {
+			trace_id   = "",
+			span_id    = "",
+			request_id = "",
+		}
+	}
 
-  forward_to = [loki.write.local.receiver]
+	forward_to = [loki.write.local.receiver]
 }
 
 local.file_match "ai_chat_logs" {
-  path_targets = [
-    {
-      "__path__"     = "/var/log/ai-chat/operations.jsonl",
-      "job"          = "ai-chat",
-      "service_name" = "ai-chat-candidate",
-      "environment"  = sys.env("DEPLOYMENT_ENVIRONMENT"),
-    },
-  ]
-  sync_period = "10s"
+	path_targets = [
+		{
+			"__path__"     = "/var/log/ai-chat/operations.jsonl",
+			"job"          = "ai-chat",
+			"service_name" = "ai-chat-candidate",
+			"environment"  = sys.env("DEPLOYMENT_ENVIRONMENT"),
+		},
+	]
+	sync_period = "10s"
 }
 
 loki.source.file "ai_chat_logs" {
-  targets    = local.file_match.ai_chat_logs.targets
-  forward_to = [loki.process.ai_chat_logs.receiver]
+	targets    = local.file_match.ai_chat_logs.targets
+	forward_to = [loki.process.ai_chat_logs.receiver]
 }
 
 loki.process "ai_chat_logs" {
-  stage.json {
-    expressions = {
-      event     = "event",
-      result    = "result",
-      trace_id  = "traceId",
-      span_id   = "spanId",
-      error_type = "errorType",
-    }
-  }
+	stage.json {
+		expressions = {
+			event      = "event",
+			result     = "result",
+			trace_id   = "traceId",
+			span_id    = "spanId",
+			error_type = "errorType",
+		}
+	}
 
-  stage.labels {
-    values = {
-      event  = "",
-      result = "",
-    }
-  }
+	stage.labels {
+		values = {
+			event  = "",
+			result = "",
+		}
+	}
 
-  stage.structured_metadata {
-    values = {
-      trace_id  = "",
-      span_id   = "",
-      error_type = "",
-    }
-  }
+	stage.structured_metadata {
+		values = {
+			trace_id   = "",
+			span_id    = "",
+			error_type = "",
+		}
+	}
 
-  forward_to = [loki.write.local.receiver]
+	forward_to = [loki.write.local.receiver]
 }
 
 local.file_match "faultlab_order_logs" {
-  path_targets = [
-    {
-      "__path__"     = "/var/log/faultlab/order-service.log",
-      "job"          = "faultlab",
-      "service_name" = "order-service",
-      "environment"  = sys.env("DEPLOYMENT_ENVIRONMENT"),
-    },
-  ]
-  sync_period = "10s"
+	path_targets = [
+		{
+			"__path__"     = "/var/log/faultlab/order-service.log",
+			"job"          = "faultlab",
+			"service_name" = "order-service",
+			"environment"  = sys.env("DEPLOYMENT_ENVIRONMENT"),
+		},
+	]
+	sync_period = "10s"
 }
 
 local.file_match "faultlab_payment_logs" {
-  path_targets = [
-    {
-      "__path__"     = "/var/log/faultlab/payment-service.log",
-      "job"          = "faultlab",
-      "service_name" = "payment-service",
-      "environment"  = sys.env("DEPLOYMENT_ENVIRONMENT"),
-    },
-  ]
-  sync_period = "10s"
+	path_targets = [
+		{
+			"__path__"     = "/var/log/faultlab/payment-service.log",
+			"job"          = "faultlab",
+			"service_name" = "payment-service",
+			"environment"  = sys.env("DEPLOYMENT_ENVIRONMENT"),
+		},
+	]
+	sync_period = "10s"
 }
 
 loki.source.file "faultlab_order_logs" {
-  targets    = local.file_match.faultlab_order_logs.targets
-  forward_to = [loki.process.faultlab_logs.receiver]
+	targets    = local.file_match.faultlab_order_logs.targets
+	forward_to = [loki.process.faultlab_logs.receiver]
 }
 
 loki.source.file "faultlab_payment_logs" {
-  targets    = local.file_match.faultlab_payment_logs.targets
-  forward_to = [loki.process.faultlab_logs.receiver]
+	targets    = local.file_match.faultlab_payment_logs.targets
+	forward_to = [loki.process.faultlab_logs.receiver]
 }
 
 loki.process "faultlab_logs" {
-  stage.json {
-    expressions = {
-      level      = "level",
-      trace_id   = "traceId",
-      span_id    = "spanId",
-      request_id = "requestId",
-    }
-  }
+	stage.json {
+		expressions = {
+			level      = "level",
+			trace_id   = "traceId",
+			span_id    = "spanId",
+			request_id = "requestId",
+		}
+	}
 
-  stage.labels {
-    values = {
-      level = "",
-    }
-  }
+	stage.labels {
+		values = {
+			level = "",
+		}
+	}
 
-  stage.structured_metadata {
-    values = {
-      trace_id   = "",
-      span_id    = "",
-      request_id = "",
-    }
-  }
+	stage.structured_metadata {
+		values = {
+			trace_id   = "",
+			span_id    = "",
+			request_id = "",
+		}
+	}
 
-  forward_to = [loki.write.local.receiver]
+	forward_to = [loki.write.local.receiver]
 }
 
 loki.write "local" {
-  endpoint {
-    url = "http://loki:3100/loki/api/v1/push"
-  }
+	endpoint {
+		url = "http://loki:3100/loki/api/v1/push"
+	}
 }
 
 otelcol.receiver.otlp "default" {
-  grpc {
-    endpoint = "0.0.0.0:4317"
-  }
+	grpc {
+		endpoint = "0.0.0.0:4317"
+	}
 
-  http {
-    endpoint = "0.0.0.0:4318"
-  }
+	http {
+		endpoint = "0.0.0.0:4318"
+	}
 
-  output {
-    traces = [otelcol.processor.batch.default.input]
-  }
+	output {
+		traces = [otelcol.processor.batch.default.input]
+	}
 }
 
 otelcol.processor.batch "default" {
-  timeout         = "5s"
-  send_batch_size = 1024
+	timeout         = "5s"
+	send_batch_size = 1024
 
-  output {
-    traces = [otelcol.exporter.otlp.tempo.input]
-  }
+	output {
+		traces = [otelcol.exporter.otlp.tempo.input]
+	}
 }
 
 otelcol.exporter.otlp "tempo" {
-  client {
-    endpoint = "tempo:4317"
+	client {
+		endpoint = "tempo:4317"
 
-    tls {
-      insecure = true
-    }
-  }
+		tls {
+			insecure = true
+		}
+	}
 }

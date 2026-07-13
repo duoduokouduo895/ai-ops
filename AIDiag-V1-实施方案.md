@@ -710,20 +710,20 @@ Smoke 功能使用 `POST /internal/smoke/telemetry`，且只在 `AIDIAG_SMOKE_EN
 
 #### Stage 5.5：V1 发布收紧（P0）
 
-- [x] [本地兼容性] AI-chat 统一 Java 21 编译/构建/运行时，升级到 Boot 4.0.7、Cloud 2025.1.2、Alibaba 2025.1.0.0、Nacos Client 3.1.1 和 LangChain4j 1.15.1；完成 159 项回归和可执行 Jar 构建；
+- [x] [本地兼容性] AI-chat 统一 Java 21 编译/构建/运行时，升级到 Boot 4.0.7、Cloud 2025.1.2、Alibaba 2025.1.0.0、Nacos Client 3.1.1 和 LangChain4j 1.15.1；完成 166 项回归和可执行 Jar 构建；
 - [x] [本地安全] 删除未来可能误开放的匿名 `/api/test/**` seam，扩大运行日志隐私测试，禁止认证详情、用户输入、异常原文、RabbitMQ nack reason 和知识库 ID 列表进入日志；
 - [x] [发布结构] 候选与生产共用受强校验的 Compose 模板，候选强制关闭 Flyway/listener/scheduler 等写任务，生产强制开启并需要维护窗口确认；Nacos 凭据使用文件型 Secret；
 - [x] [Nacos 本地实现] 锁定 Nacos 3.2.2 镜像 digest，完成资源/冲突门禁、完整备份、官方干净 schema、白名单迁移、独立鉴权、最小权限 RBAC、Secret 隔离、验证与保留数据的停止/恢复脚本；
 - [x] [Nacos 云端基础验收] 在独立端口、数据库、volumes 和 Compose Project 创建 Nacos 3.2.2 候选；配置/历史行数稳定为 `19/10`，9 项必需配置非空，匿名读取 403，候选用户仅具配置读与 naming 读写权限；源 Nacos 2.1.1 保持运行且 restart count 为 0；证据见 [`docs/verification/2026-07-13-nacos3-candidate-cloud.md`](docs/verification/2026-07-13-nacos3-candidate-cloud.md)；
-- [ ] [Nacos 应用验收] 新版 AI-chat 完成启动后再验证服务注册、断线重连和客户端 Secret 不入日志；通过后才单独评审现有 Nacos 2.1.1 的替换方案；
-- [ ] [Elasticsearch 兼容门禁] Boot 4.0.7 / Spring Data Elasticsearch 6.0.6 解析到 9.x client，而当前共享 server 为 8.13.4；实测 `compatible-with=9` 的索引 HEAD 返回 400。不得用关闭 Repository 或本地 fallback 掩盖失败，也不得原地跨主版本覆盖共享集群；经明确确认后创建独立、无共享数据卷的 Elasticsearch 9 候选，再做索引与向量链路验收；
-- [ ] [候选门禁] 新版 AI-chat 已验证 Nacos 配置可读取且 file Secret 可由 uid 10001 读取，但因 Elasticsearch 主版本不兼容健康门禁回滚；完成 ES 隔离候选后继续验证依赖连接、注册、真实登录、一次受控 SSE Chat、指标/日志/Trace、资源上限和候选回滚；
+- [x] [Nacos 应用验收] AI-chat 使用 mode-specific `spring.application.name` 注册为 `ai-chat-candidate`，恰有 1 个健康实例；受控停止隔离 Nacos 时应用依靠本地配置缓存保持健康且零重启，Nacos 恢复后自动重新注册；客户端 Secret 未进入日志。现有 Nacos 2.1.1 未停止或替换；
+- [x] [Elasticsearch 兼容门禁] 创建独立 Elasticsearch 9.3.2 + IK 9.3.2 候选，锁定官方 amd64 镜像 digest 与 IK ZIP SHA-256；候选使用独立 config/data volumes、鉴权与索引级最小权限，端口仅绑定 loopback/私网。IK 中文 Mapping/检索、业务索引、dense_vector KNN 与权限负向测试全部通过，现有 Elasticsearch 8.13.4 保持运行且零重启；
+- [x] [候选门禁] AI-chat release `20260713-v1-nacos3-es9-ik-candidate-r4` 通过 166 项镜像内测试、健康/资源/只读根文件系统、Nacos 注册、真实 Guest SSE、MySQL 持久化、ES9 写入/删除、IK Mapping、Prometheus/Loki/Tempo 关联和精确清理门禁；Nginx/DNS 与生产写任务保持不变；
 - [ ] [可观测门禁] 启动早期日志已通过受控文件采集到 Loki；仍需完成主机外 HTTPS/主机可用性检查。Grafana 继续保持 loopback 或经 TLS/鉴权反向代理访问；
 - [ ] [Secret 门禁] 轮换曾经进入聊天记录或 Git 历史的 DeepSeek、Nacos、JWT、数据库、中间件和 OSS 凭据，并逐项验证旧实例回滚策略；
 - [ ] [生产切换] 在维护窗口停止旧实例写任务，执行生产 Flyway/启动/业务验收，预置 Nginx/TLS 后再切换 DNS；失败时按记录恢复旧 upstream/A 记录；
 - [ ] [发布归档] 归档 SBOM、镜像 digest、测试/Compose/健康/业务/遥测证据、已知限制和回滚演练结果，创建 V1 tag 后才对外声明第一版发布。
 
-截至 2026-07-13，V1 的业务闭环已经具备，Nacos 3.2.2 隔离候选的基础门禁已通过。当前关键阻塞是 Elasticsearch 8 server 与 9 client 的主版本不兼容，之后才是应用级 Nacos、Secret、完整候选与生产切换门禁。在这些门禁通过前可以继续展示现有私有候选和 Grafana，但不能把新版 AI-chat 标记为正式生产发布。
+截至 2026-07-13，V1 的业务闭环、Nacos 3.2.2 应用级候选、Elasticsearch 9.3.2 + IK 候选和新版 AI-chat 私有候选均已通过。当前剩余发布阻塞是历史 Secret 逐项轮换、主机外监控、生产 Nginx/TLS/维护窗口切换、最终回滚演练与发布归档；在这些门禁完成前可以展示私有候选和 Grafana，但不能把新版 AI-chat 标记为正式生产发布。详细证据见 [`docs/verification/2026-07-13-elasticsearch9-ik-candidate-cloud.md`](docs/verification/2026-07-13-elasticsearch9-ik-candidate-cloud.md)。
 
 总验收：AI-chat 的真实告警可生成引用其真实遥测证据的确定性诊断报告；数据采集不包含 Prompt、回答、用户/会话标识或 Secret；模型失败不影响规则报告；AIDiag 故障不阻断 AI-chat 主业务；部署和回滚均不要求手工上传 Jar。
 
@@ -744,7 +744,7 @@ Smoke 功能使用 `POST /internal/smoke/telemetry`，且只在 `AIDIAG_SMOKE_EN
 - [x] 完成 AI-chat 独立 Docker 构建、私有 telemetry 网络和回滚基线；
 - [x] 完成 AI-chat 遥测隐私审查后再允许 Loki/Tempo 采集；
 - [x] 完成四类 AI-chat 规则、隔离故障验收和 Stage 5.4 独立故障入口；Admin 运维页只作为辅助入口，不与 AI-chat 共用救援职责。
-- [ ] 完成 Stage 5.5 的 Elasticsearch 9 隔离候选、Nacos 应用验收、Secret 轮换、新版候选、主机外监控和生产切换门禁后发布 V1。
+- [ ] 完成 Stage 5.5 剩余的 Secret 轮换、主机外监控、生产切换与发布归档门禁后发布 V1；Elasticsearch 9 + IK、Nacos 应用验收和新版私有候选已完成。
 
 ---
 

@@ -6,7 +6,7 @@
 
 隔离 Nacos 3.2.2 候选已经在 GCP `34.150.80.173` 创建并通过基础门禁。它使用独立容器、数据库、数据库用户、Docker volumes 和 Compose Project，仅将端口绑定到 loopback；现有 Nacos 2.1.1 没有被停止、重启或替换。
 
-这项结果证明 Nacos 3 服务端、配置迁移、鉴权和最小权限边界可用，但还不能证明 AI-chat 已完整通过应用级验收。新版 AI-chat 后续启动已能读取 Nacos 配置，随后被独立的 Elasticsearch 主版本兼容门禁阻断并自动回滚，因此服务注册、断线重连和真实 SSE 仍待 Elasticsearch 候选完成后验证。
+这项结果首先证明 Nacos 3 服务端、配置迁移、鉴权和最小权限边界可用。后续 Elasticsearch 9 候选完成后，AI-chat 已补做应用级服务注册、受控 Nacos 停止/恢复重连和真实 SSE 验收；最终结果见 [`2026-07-13-elasticsearch9-ik-candidate-cloud.md`](./2026-07-13-elasticsearch9-ik-candidate-cloud.md)。
 
 ## 云端隔离边界
 
@@ -43,8 +43,8 @@
 
 - 两个失败候选已停止并保留证据，没有删除其数据库或 volumes；当前干净候选独立运行。
 - 当前候选不替代 Nacos 2.1.1；正式替换需要单独维护窗口、应用级断线重连验证和回滚决策。
-- 新版 AI-chat 已通过 Nacos 配置读取，但尚未完成注册、真实登录、SSE 和遥测验收；直接原因是 Elasticsearch 9 client 无法连接现有 8.13.4 server。
-- 不应原地升级共享 Elasticsearch。下一步建议创建无共享数据卷、仅私网访问的 Elasticsearch 9 隔离候选，经 Repository、索引和向量检索验证后再继续 AI-chat 门禁。
+- 新版 AI-chat 已通过 Nacos 配置读取、`ai-chat-candidate` 健康注册、受控 Nacos 停止后的应用存活与恢复重注册；注册名不再沿用硬编码 `ai-agent-service`。
+- 共享 Elasticsearch 未原地升级；已创建无共享数据卷、仅私网访问的 Elasticsearch 9.3.2 + IK 隔离候选并完成后续 AI-chat 门禁。
 
 ## 官方兼容性依据
 

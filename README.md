@@ -116,7 +116,7 @@ Windows PowerShell：
 
 ## 下一步
 
-隔离 Nacos 3.2.2 云端候选已通过：使用全新数据库、volumes 和 Compose Project，配置/历史行数启动前后保持 `19/10`，9 项必需配置非空，匿名访问返回 403，最小权限用户通过验证；现有 Nacos 2.1.1 未停止或替换。随后新版 AI-chat 私有候选已两次触发健康门禁并自动回滚：首次暴露 file Secret 在 Compose bind mount 下不会应用 `uid/gid/mode`，现已改为宿主机预置 uid/gid `10001:10001`、mode `0400` 并通过容器内回归；第二次确认 Boot 4 / Spring Data Elasticsearch 6 的 9.x client 无法连接现有 Elasticsearch 8.13.4。下一步必须先评审并创建独立 Elasticsearch 9 候选，不能原地升级当前共享集群；之后才能继续真实登录、SSE、遥测与回滚验收。启动早期失败日志已接入 Loki，仍需补宿主机外部可用性监控。详细证据见 [`docs/verification/2026-07-13-nacos3-candidate-cloud.md`](docs/verification/2026-07-13-nacos3-candidate-cloud.md)。shadow mode 的非重叠真实样本继续收集，但不阻塞个人展示版 V1；它只阻止我们宣称生产诊断准确率。
+隔离 Nacos 3.2.2 与 Elasticsearch 9.3.2 + IK 9.3.2 云端候选均已通过，且没有替换现有 Nacos 2.1.1 / Elasticsearch 8.13.4。新版 AI-chat 私有候选已完成 166 项镜像内测试、Nacos 服务注册与恢复重连、ES9 业务索引和 IK Mapping、一次临时 Guest SSE、MySQL 持久化、Prometheus/Loki/Tempo 关联及精确清理；Nginx、DNS、Flyway、listener 和 scheduler 均未切换。详细证据见 [`docs/verification/2026-07-13-elasticsearch9-ik-candidate-cloud.md`](docs/verification/2026-07-13-elasticsearch9-ik-candidate-cloud.md)。下一步是历史 Secret 逐项轮换、主机外监控、生产 Nginx/TLS/维护窗口切换和最终发布归档。shadow mode 的非重叠真实样本继续收集，但不阻塞个人展示版 V1；它只阻止我们宣称生产诊断准确率。
 
 ## License
 

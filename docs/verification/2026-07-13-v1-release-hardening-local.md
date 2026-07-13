@@ -2,7 +2,7 @@
 
 ## 结论
 
-AI-chat 已完成 V1 发布候选的本地版本迁移、安全收紧和发布结构重构，并执行了云端私有候选验证。隔离 Nacos 3.2.2 基础门禁已经通过，新版 AI-chat 也已成功读取配置；当前健康门禁因 Elasticsearch 9 client 与共享 Elasticsearch 8.13.4 不兼容而正确拒绝并回滚。当前结论是“Nacos 基础候选通过、Elasticsearch 隔离候选待确认”，不是“已经可以正式发布”。
+AI-chat 已完成 V1 发布候选的本地版本迁移、安全收紧和发布结构重构。后续隔离 Nacos 3.2.2、Elasticsearch 9.3.2 + IK 9.3.2 和新版 AI-chat 私有候选均已通过应用级云端验收；共享 Nacos 2.1.1、Elasticsearch 8.13.4、Nginx 和 DNS 未被替换。当前结论是“私有候选通过、生产切换门禁待完成”，不是“已经正式发布”。
 
 ## 已验证版本
 
@@ -16,14 +16,15 @@ AI-chat 已完成 V1 发布候选的本地版本迁移、安全收紧和发布�
 | Spring Data Elasticsearch | 6.0.6 |
 | Elasticsearch Java Client | 9.2.8 |
 | Elasticsearch REST Client | 9.3.1（由 LangChain4j Elasticsearch 引入） |
-| 当前云端 Elasticsearch Server | 8.13.4，不兼容上述 9.x client |
+| 隔离候选 Elasticsearch Server | 9.3.2 + IK 9.3.2；与 9.x client 通过真实验收 |
+| 现有共享 Elasticsearch Server | 8.13.4，保持运行，仅作为旧实例回滚链 |
 | LangChain4j core | 1.15.1 |
 | LangChain4j Spring Boot 4 starter | 1.15.1-beta25 |
 | Apache HttpClient 5 | 5.5.2，由 Boot BOM 管理 |
 
 ## 本地验证
 
-- Java 21 执行 `mvn verify`：159 tests，0 failures，0 errors，0 skipped；可执行 Jar 构建成功。
+- Java 21 执行最终 `mvn verify`：166 tests，0 failures，0 errors，0 skipped；可执行 Jar 构建成功。
 - `RuntimeLogPrivacyTest` 覆盖源代码中的运行日志调用，禁止用户输入、认证详情、异常原文、文件/OSS 信息、知识库 ID 列表和 Throwable 堆栈进入日志。
 - `SearchSecurityTest` 验证未认证请求不能访问测试 seam；生产 `SecurityConfig` 已删除 `/api/test/**` 放行规则。
 - Cloud Compose 使用 dummy file secrets 执行静态展开通过；候选和生产模式的端口、网络、写任务和鉴权要求由激活脚本分别校验。
@@ -36,6 +37,8 @@ AI-chat 已完成 V1 发布候选的本地版本迁移、安全收紧和发布�
 - `20260713-v1-rc3` 与 `20260713-v1-rc4` 均能构建 Java 21 镜像，但 9 个 Nacos Data ID 被客户端判定为空，应用因缺失 `spring.r2dbc.username` fail closed；没有使用本地默认凭据绕过。
 - 从 GCP 主机直接调用现有 Nacos 2.1.1 HTTP API，9 个 Data ID 均返回 HTTP 200，响应大小为 473～4755 bytes；只记录状态和大小，未读取或归档配置正文。
 - 每次失败均未修改 Nginx/DNS、未运行 Flyway、listener 或 scheduler；激活脚本恢复旧 release 并重建旧共享镜像标签。
+- 后续 release `20260713-v1-nacos3-es9-ik-candidate-r4` 在隔离 Elasticsearch 9.3.2 + IK 上通过：容器 healthy/零重启、Nacos 同名注册与恢复重连、真实 Guest SSE、MySQL/ES 写入删除、Prometheus/Loki/Tempo 关联和精确清理。
+- 完整证据见 [`2026-07-13-elasticsearch9-ik-candidate-cloud.md`](./2026-07-13-elasticsearch9-ik-candidate-cloud.md)。
 
 ## AIDiag 云端发布验证
 
@@ -50,18 +53,15 @@ AI-chat 已完成 V1 发布候选的本地版本迁移、安全收紧和发布�
 
 ## 对抗性审查
 
-1. Nacos Client 3.1.1 与当前云端 Nacos Server 2.1.1 的真实候选验证已经失败，不能直接部署为生产；不得继续通过增加本地默认配置掩盖该问题。
+1. Nacos Client 3.1.1 不再连接共享 2.1.1；隔离 Nacos 3.2.2 已通过。生产切换仍必须保留共享旧实例回滚链，不能原地覆盖。
 2. Nacos 2.1.1 升级到 3.x 会改变数据库结构；必须先备份并使用隔离数据库/端口验证，不能原地试错。
 3. Spring Boot 4 默认转向 Jackson 3；当前 RabbitMQ、Redis 和部分 LangChain4j 链路保留 Jackson 2 兼容桥。V1 可使用，但后续升级兼容桥前必须迁移并做消息/缓存兼容测试。
-4. LangChain4j Spring starter 仍是 beta 版本；现有 159 项测试只证明本地代码契约，仍需云端真实 Provider、Nacos、Elasticsearch 和 SSE 验收。
-5. 候选模式关闭 Flyway、listener、scheduler、索引同步和模型 warmup，只能证明只读启动与遥测；生产验收必须在旧写实例停止后单独执行。
-6. Spring Data Elasticsearch 6 使用 Elasticsearch 9 libraries；云端对同一 `HEAD /conversations` 实测默认和 `compatible-with=8` 返回 200，`compatible-with=9` 返回 400，与候选启动异常一致。关闭 Repository、忽略健康错误或强行覆盖 client 版本都会削弱真实兼容性门禁，不采用。
+4. LangChain4j Spring starter 仍是 beta 版本；166 项测试和云端 SSE/ES 验收证明当前路径可用，但升级 starter 时仍需重复知识库、向量和流式回归。
+5. 候选模式关闭 Flyway、listener、scheduler、索引同步和模型 warmup，只能证明私有候选与受控业务主链；生产验收必须在旧写实例停止后单独执行。
+6. Spring Data Elasticsearch 6 使用 Elasticsearch 9 libraries；隔离 9.3.2 + IK 已通过，现有 8.13.4 继续只服务旧实例。不得让新旧应用交叉连接错误主版本。
 
 ## 未完成门禁
 
-- Nacos 3.2.2 的 AI-chat 服务注册、断线重连和客户端 Secret 日志验收（基础候选与鉴权已通过）；
-- 独立 Elasticsearch 9 候选及 Repository、索引、向量检索兼容验收；
-- 新版 AI-chat 云端候选部署和真实登录/SSE/遥测验收；
 - 主机外可用性监控（启动早期日志采集已完成）；
 - 历史 Secret 逐项轮换；
 - Nginx/TLS、维护窗口、生产 Flyway、业务回归、DNS 切换和最终回滚演练。

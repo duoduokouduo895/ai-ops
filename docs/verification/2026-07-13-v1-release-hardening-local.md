@@ -33,11 +33,20 @@ AI-chat 已完成 V1 发布候选的本地版本迁移、安全收紧和发布�
 - 从 GCP 主机直接调用现有 Nacos 2.1.1 HTTP API，9 个 Data ID 均返回 HTTP 200，响应大小为 473～4755 bytes；只记录状态和大小，未读取或归档配置正文。
 - 每次失败均未修改 Nginx/DNS、未运行 Flyway、listener 或 scheduler；激活脚本恢复旧 release 并重建旧共享镜像标签。
 
+## AIDiag 云端发布验证
+
+- `20260713-v1-hardening-1` 已由发布脚本激活，`/opt/aidiag/current` 指向对应不可变发布目录；12 个 Compose 服务全部通过启动门禁，发布脚本返回 0。
+- AIDiag backend、Grafana、order-service 均返回 HTTP 200，Prometheus `/-/ready` 返回 Ready；所有 AIDiag 容器重启计数为 0。
+- Grafana `/api/health` 返回 HTTP 200 且 database 为 `ok`，运行时内存限制为 1610612736 bytes（1536 MiB）。
+- Prometheus 查询得到 application、Nacos、MySQL、Redis、RabbitMQ、Elasticsearch 共 6 个 `blackbox-ai-chat` 探针，当前值均为 1。
+- Alloy 没有挂载 Docker socket；失败候选写入的受控启动日志已由 Alloy 发送到 Loki，查询 `{service_name="ai-chat-startup",event="ai_chat_startup_failure"}` 返回成功并检索到数据。
+- 发布后发现 Grafana 13 会尝试后台安装建议插件，且缺失空的 `plugins`、`alerting` provisioning 子目录会产生启动错误。后续收紧已禁用预装插件后台安装、版本/插件更新检查和匿名统计，并补齐合法空配置；使用相同固定镜像的隔离容器验证健康通过且 `level=error` 为 0。该收紧需随下一不可变发布归档激活。
+
 ## 对抗性审查
 
 1. Nacos Client 3.1.1 与当前云端 Nacos Server 2.1.1 的真实候选验证已经失败，不能直接部署为生产；不得继续通过增加本地默认配置掩盖该问题。
 2. Nacos 2.1.1 升级到 3.x 会改变数据库结构；必须先备份并使用隔离数据库/端口验证，不能原地试错。
-3. Spring Boot 4 默认转向 Jackson 3；当前 RabbitMQ、Redis 和部分 LangChain4j 链路保留 Jackson 2 兼容桥。V1 可使用，但后续 4.x 升级前必须迁移并做消息/缓存兼容测试。
+3. Spring Boot 4 默认转向 Jackson 3；当前 RabbitMQ、Redis 和部分 LangChain4j 链路保留 Jackson 2 兼容桥。V1 可使用，但后续升级兼容桥前必须迁移并做消息/缓存兼容测试。
 4. LangChain4j Spring starter 仍是 beta 版本；现有 159 项测试只证明本地代码契约，仍需云端真实 Provider、Nacos、Elasticsearch 和 SSE 验收。
 5. 候选模式关闭 Flyway、listener、scheduler、索引同步和模型 warmup，只能证明只读启动与遥测；生产验收必须在旧写实例停止后单独执行。
 
@@ -45,6 +54,6 @@ AI-chat 已完成 V1 发布候选的本地版本迁移、安全收紧和发布�
 
 - 隔离 Nacos 3.2.1、鉴权、配置复制与回滚验证；
 - 新版 AI-chat 云端候选部署和真实登录/SSE/遥测验收；
-- 启动早期日志与主机外可用性监控；
+- 主机外可用性监控（启动早期日志采集已完成）；
 - 历史 Secret 逐项轮换；
 - Nginx/TLS、维护窗口、生产 Flyway、业务回归、DNS 切换和最终回滚演练。

@@ -707,7 +707,7 @@ Smoke 功能使用 `POST /internal/smoke/telemetry`，且只在 `AIDIAG_SMOKE_EN
 - [x] [发布结构] 候选与生产共用受强校验的 Compose 模板，候选强制关闭 Flyway/listener/scheduler 等写任务，生产强制开启并需要维护窗口确认；Nacos 凭据使用文件型 Secret；
 - [ ] [Nacos 门禁] 备份现有 Nacos 数据库和配置摘要，在独立端口/独立数据库验证 Nacos 3.2.1；通过后再单独评审现有 Nacos 升级、鉴权和回滚；
 - [ ] [候选门禁] 发布新版 AI-chat 私有候选，验证配置读取、依赖连接、真实登录、一次受控 SSE Chat、指标/日志/Trace、资源上限和候选回滚；
-- [ ] [可观测门禁] 完成启动早期日志采集和主机外 HTTPS/主机可用性检查；Grafana 继续保持 loopback 或经 TLS/鉴权反向代理访问；
+- [ ] [可观测门禁] 启动早期日志已通过受控文件采集到 Loki；仍需完成主机外 HTTPS/主机可用性检查。Grafana 继续保持 loopback 或经 TLS/鉴权反向代理访问；
 - [ ] [Secret 门禁] 轮换曾经进入聊天记录或 Git 历史的 DeepSeek、Nacos、JWT、数据库、中间件和 OSS 凭据，并逐项验证旧实例回滚策略；
 - [ ] [生产切换] 在维护窗口停止旧实例写任务，执行生产 Flyway/启动/业务验收，预置 Nginx/TLS 后再切换 DNS；失败时按记录恢复旧 upstream/A 记录；
 - [ ] [发布归档] 归档 SBOM、镜像 digest、测试/Compose/健康/业务/遥测证据、已知限制和回滚演练结果，创建 V1 tag 后才对外声明第一版发布。

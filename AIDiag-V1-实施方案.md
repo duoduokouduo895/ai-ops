@@ -648,11 +648,11 @@ Smoke 功能使用 `POST /internal/smoke/telemetry`，且只在 `AIDIAG_SMOKE_EN
 - [x] [本地实现] 为 SSE 主链增加请求结果、TTFT、完整耗时、活跃流、取消/超时和 Provider outcome；为 R2DBC、RabbitMQ outbox、Elasticsearch/RAG 增加必要的低基数指标；
 - [x] [本地实现] 接入固定 OTel Java Agent 2.29.0，只向 Alloy 导出 Trace；增加脱敏 JSON 运维日志和 traceId/spanId，禁止采集 Prompt、回答、用户/会话标识和 Secret；
 - [x] [测试] 覆盖成功、错误、取消、超时、重复订阅和高并发；验证 tag 基数有界、请求正文不进入 metric/log/span；
-- [ ] [云端验收] Prometheus 连续抓取成功，Loki 可按 service_name/event 查询，Tempo 可定位一次真实测试请求的 Trace。
+- [x] [云端验收] Prometheus 连续抓取成功，Loki 可按 service_name/event 查询，Tempo 可定位一次真实测试请求的 Trace。
 
 门禁：三类信号可由同一 traceId/时间窗关联；日志与 Trace 抽样检查不含隐私数据；遥测失败不阻断聊天主链。
 
-截至 2026-07-13，本地实现与隐私测试完成，云端私有候选 `20260713-stage5-candidate-9` 和 AIDiag release `20260713-stage5-observability-1` 已打通 Prometheus、Loki 与 Tempo 管道。Prometheus target 为 UP，Tempo 已保存 AI-chat Actuator 请求 Trace，Loki 已通过无隐私 smoke event 验证采集；由于尚未对共享生产数据执行真实登录/SSE Chat 请求，三信号同一真实 Chat traceId 的最终验收保持未勾选。证据见 [`docs/verification/2026-07-13-stage5-observability.md`](docs/verification/2026-07-13-stage5-observability.md)。
+截至 2026-07-13，本地实现与隐私测试完成，云端私有候选 `20260713-stage5-candidate-12` 和 AIDiag release `20260713-stage5-observability-1` 已打通 Prometheus、Loki 与 Tempo。最终使用一次临时 Guest 真实 SSE Chat 验证：Prometheus 记录 success、Loki 运维事件与 Tempo Trace 可由同一 traceId 关联，抽样不含 Prompt、回答、用户/会话标识或 Secret；测试 Guest、Token、会话、消息、ES 派生文档和准入键随后完成精确清理。证据见 [`docs/verification/2026-07-13-stage5-observability.md`](docs/verification/2026-07-13-stage5-observability.md)。
 
 #### Stage 5.2：AIDiag AI-chat 诊断规则（必要 P0 + Trace P1）
 

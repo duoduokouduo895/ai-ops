@@ -32,4 +32,17 @@ class AiDiagnosisAdviceValidatorTests {
         assertThat(validator.validate(fabricatedEvidence, Set.of("evidence-1"), Set.of()).accepted()).isFalse();
         assertThat(validator.validate(uncontrolledAction, Set.of(), Set.of("Disable the controlled fault")).accepted()).isFalse();
     }
+
+    @Test
+    void rejectsSecretLikeOrPersonalDataReturnedByTheModel() {
+        var credential = new AiDiagnosisAdvice("Use sk-1234567890abcdefghijkl", List.of("A hypothesis"), List.of(),
+                List.of(), List.of());
+        var personalData = new AiDiagnosisAdvice("Summary", List.of("Contact user@example.com"), List.of(),
+                List.of(), List.of());
+
+        assertThat(validator.validate(credential, Set.of(), Set.of()).rejectionReason())
+                .isEqualTo("response contains secret-like or personal data");
+        assertThat(validator.validate(personalData, Set.of(), Set.of()).rejectionReason())
+                .isEqualTo("response contains secret-like or personal data");
+    }
 }

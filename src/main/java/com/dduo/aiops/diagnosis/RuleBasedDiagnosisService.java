@@ -5,6 +5,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.BooleanSupplier;
 
 import org.springframework.stereotype.Service;
 
@@ -21,6 +22,11 @@ public class RuleBasedDiagnosisService {
     }
 
     public Stage3DiagnosisRepository.DiagnosisResult diagnose(Stage3DiagnosisRepository.IncidentContext incident) {
+        return diagnose(incident, () -> true);
+    }
+
+    Stage3DiagnosisRepository.DiagnosisResult diagnose(Stage3DiagnosisRepository.IncidentContext incident,
+            BooleanSupplier renewLease) {
         var rule = registry.find(incident.primaryService(), incident.alertName()).orElse(null);
         if (rule == null) {
             return new Stage3DiagnosisRepository.DiagnosisResult("NO_DETERMINISTIC_RULE", "UNSPECIFIED",
@@ -30,8 +36,11 @@ public class RuleBasedDiagnosisService {
         }
 
         var window = timeWindow(incident);
+        requireCurrentLease(renewLease);
         var metric = collector.collectMetric(rule, window);
+        requireCurrentLease(renewLease);
         var logs = collector.collectLogs(rule, window);
+        requireCurrentLease(renewLease);
         var traces = collector.collectTraces(rule, window);
         var score = BigDecimal.ZERO;
         if (metric.matched()) {
@@ -61,6 +70,20 @@ public class RuleBasedDiagnosisService {
         return new Stage3DiagnosisRepository.DiagnosisResult(rule.candidateName(), rule.groundTruth(), rule.description(), score,
                 verification, rule.remediationJson(),
                 List.of(metric.observation(), logs.observation(), traces.observation()), limitations);
+    }
+
+    private static void requireCurrentLease(BooleanSupplier renewLease) {
+        if (!renewLease.getAsBoolean()) {
+            throw new StaleDiagnosisLeaseException();
+        }
+    }
+
+    static final class StaleDiagnosisLeaseException extends RuntimeException {
+        private static final long serialVersionUID = 1L;
+
+        StaleDiagnosisLeaseException() {
+            super("Stage 3 diagnosis lease is no longer current");
+        }
     }
 
     private static void addFailure(List<String> limitations, TelemetryEvidenceCollector.CollectedObservation observation,

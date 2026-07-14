@@ -64,7 +64,9 @@ class Stage4AiDiagnosisServiceTests {
 
         assertThat(result.status()).isEqualTo("FALLBACK");
         assertThat(result.failureCode()).isEqualTo("MODEL_UNAVAILABLE");
-        verify(repository).completeAttempt(eq(ATTEMPT_ID), eq("FALLBACK"), any(), eq("MODEL_UNAVAILABLE"), any());
+        assertThat(result.failureReason()).isEqualTo("Model provider is unavailable");
+        verify(repository).completeAttempt(eq(ATTEMPT_ID), eq("FALLBACK"), any(), eq("MODEL_UNAVAILABLE"),
+                eq("Model provider is unavailable"));
     }
 
     @Test

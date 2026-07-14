@@ -1,6 +1,7 @@
 package com.dduo.aiops.diagnosis;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
@@ -11,6 +12,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import com.dduo.aiops.diagnosis.Stage3DiagnosisRepository.IncidentContext;
 import com.sun.net.httpserver.HttpExchange;
@@ -180,6 +182,31 @@ class RuleBasedDiagnosisServiceTests {
         assertThat(raw.path("traceCount").asInt()).isEqualTo(50);
         assertThat(raw.path("traces")).hasSize(50);
         assertThat(result.observations().get(2).evidence().rawDataJson()).doesNotContain("prompt", "authorization", "cookie");
+    }
+
+    @Test
+    void renewsTheLeaseBeforeEveryExternalTelemetryQuery() {
+        var renewals = new AtomicInteger();
+
+        var result = service.diagnose(incident("ai-chat-candidate", "AiChatModelTimeout"), () -> {
+            renewals.incrementAndGet();
+            return true;
+        });
+
+        assertThat(result.verificationStatus()).isEqualTo("SUPPORTED");
+        assertThat(renewals).hasValue(3);
+    }
+
+    @Test
+    void stopsQueryingImmediatelyAfterTheLeaseIsLost() {
+        var renewals = new AtomicInteger();
+
+        assertThatThrownBy(() -> service.diagnose(incident("ai-chat-candidate", "AiChatModelTimeout"),
+                () -> renewals.incrementAndGet() < 2))
+                .isInstanceOf(RuleBasedDiagnosisService.StaleDiagnosisLeaseException.class);
+        assertThat(metricQueries).hasSize(1);
+        assertThat(logQueries).isEmpty();
+        assertThat(traceQueries).isEmpty();
     }
 
     private static IncidentContext incident(String serviceName, String alertName) {

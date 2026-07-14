@@ -66,6 +66,18 @@ require_env_value AICHAT_PRODUCTION_CONFIRMED true
 require_env_value AICHAT_SERVICE_NAME ai-chat-production
 require_env_value NACOS_SERVER_ADDR nacos-v3:8848
 require_env_value ELASTICSEARCH_SERVER_ADDR elasticsearch-v9:9200
+public_health_url="$(env_value AICHAT_PUBLIC_HEALTH_URL)"
+python3 - "${public_health_url}" <<'PY'
+import sys
+from urllib.parse import urlsplit
+
+value = sys.argv[1]
+parsed = urlsplit(value)
+if (not value or len(value) > 2048 or any(character.isspace() for character in value)
+        or parsed.scheme != "https" or not parsed.hostname or parsed.username or parsed.password
+        or parsed.query or parsed.fragment or not parsed.path.startswith("/")):
+    raise SystemExit("AICHAT_PUBLIC_HEALTH_URL must be an HTTPS URL without credentials, query, or fragment")
+PY
 
 writer_evidence="${cutover_dir}/old-writers-stopped.env"
 approval_evidence="${cutover_dir}/approved.env"
@@ -137,17 +149,25 @@ else
   next_marker="$(mktemp "${target_dir}/.ai-chat-production.env.next.XXXXXX")"
   cleanup() { rm -f -- "${next_target}" "${next_marker}"; }
   trap cleanup EXIT
-  cat >"${next_target}" <<'JSON'
-[
-  {"targets":["ai-chat-production:9091"],"labels":{"scrape_kind":"metrics","service_name":"ai-chat-production"}},
-  {"targets":["http://ai-chat-production:9091/actuator/health"],"labels":{"scrape_kind":"probe","module":"http_health","component":"application","target_kind":"application","service_name":"ai-chat-production"}},
-  {"targets":["mysql:3306"],"labels":{"scrape_kind":"probe","module":"tcp_connect","component":"mysql","target_kind":"dependency","service_name":"ai-chat-production"}},
-  {"targets":["redis:6379"],"labels":{"scrape_kind":"probe","module":"tcp_connect","component":"redis","target_kind":"dependency","service_name":"ai-chat-production"}},
-  {"targets":["rabbitmq:5672"],"labels":{"scrape_kind":"probe","module":"tcp_connect","component":"rabbitmq","target_kind":"dependency","service_name":"ai-chat-production"}},
-  {"targets":["elasticsearch-v9:9200"],"labels":{"scrape_kind":"probe","module":"tcp_connect","component":"elasticsearch","target_kind":"dependency","service_name":"ai-chat-production"}},
-  {"targets":["nacos-v3:8848"],"labels":{"scrape_kind":"probe","module":"tcp_connect","component":"nacos","target_kind":"dependency","service_name":"ai-chat-production"}}
+  python3 - "${next_target}" "${public_health_url}" <<'PY'
+import json
+import sys
+
+service = "ai-chat-production"
+targets = [
+    {"targets": ["ai-chat-production:9091"], "labels": {"scrape_kind": "metrics", "service_name": service}},
+    {"targets": ["http://ai-chat-production:9091/actuator/health"], "labels": {"scrape_kind": "probe", "module": "http_health", "component": "application", "target_kind": "application", "service_name": service}},
+    {"targets": [sys.argv[2]], "labels": {"scrape_kind": "probe", "module": "http_health", "component": "public-ingress", "target_kind": "ingress", "service_name": service}},
+    {"targets": ["mysql:3306"], "labels": {"scrape_kind": "probe", "module": "tcp_connect", "component": "mysql", "target_kind": "dependency", "service_name": service}},
+    {"targets": ["redis:6379"], "labels": {"scrape_kind": "probe", "module": "tcp_connect", "component": "redis", "target_kind": "dependency", "service_name": service}},
+    {"targets": ["rabbitmq:5672"], "labels": {"scrape_kind": "probe", "module": "tcp_connect", "component": "rabbitmq", "target_kind": "dependency", "service_name": service}},
+    {"targets": ["elasticsearch-v9:9200"], "labels": {"scrape_kind": "probe", "module": "tcp_connect", "component": "elasticsearch", "target_kind": "dependency", "service_name": service}},
+    {"targets": ["nacos-v3:8848"], "labels": {"scrape_kind": "probe", "module": "tcp_connect", "component": "nacos", "target_kind": "dependency", "service_name": service}},
 ]
-JSON
+with open(sys.argv[1], "w", encoding="utf-8") as handle:
+    json.dump(targets, handle, ensure_ascii=False, separators=(",", ":"))
+    handle.write("\n")
+PY
   python3 -m json.tool "${next_target}" >/dev/null
   target_sha256="$(sha256sum "${next_target}" | awk '{print $1}')"
   cat >"${next_marker}" <<EOF
@@ -173,7 +193,7 @@ grep -qxF "TARGET_SHA256=${target_sha256}" "${marker_file}" \
 discovered=false
 for _ in $(seq 1 15); do
   if docker exec "${prometheus_container}" wget -qO- 'http://localhost:9090/api/v1/targets?state=active' \
-      | python3 -c 'import json,sys; p=json.load(sys.stdin); t=[x for x in p["data"]["activeTargets"] if x.get("labels",{}).get("service_name")=="ai-chat-production"]; pools={x.get("scrapePool") for x in t}; raise SystemExit(0 if len(t)==7 and pools=={"ai-chat-production","blackbox-ai-chat"} else 1)' ; then
+      | python3 -c 'import json,sys; p=json.load(sys.stdin); t=[x for x in p["data"]["activeTargets"] if x.get("labels",{}).get("service_name")=="ai-chat-production"]; pools={x.get("scrapePool") for x in t}; raise SystemExit(0 if len(t)==8 and pools=={"ai-chat-production","blackbox-ai-chat"} else 1)' ; then
     discovered=true
     break
   fi
@@ -188,7 +208,7 @@ done
       mv "${marker_file}" "${failed_dir}/activation.env"
       chmod 0600 "${failed_dir}"/*
     fi
-    echo "Prometheus did not discover all seven production targets; a new activation was withdrawn" >&2
+    echo "Prometheus did not discover all eight production targets; a new activation was withdrawn" >&2
     exit 75
   }
 
@@ -199,6 +219,6 @@ chmod 0600 "${evidence_dir}/activation.env"
 
 echo "production_monitoring_activation=PASS"
 echo "cutover_id=${cutover_id}"
-echo "production_targets=7"
+echo "production_targets=8"
 echo "candidate_targets=unchanged"
 echo "expected_application_state=down-until-ai-chat-production-starts"

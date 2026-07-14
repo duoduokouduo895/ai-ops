@@ -180,3 +180,13 @@ groups:
         annotations:
           summary: "AI-chat dependency {{ $labels.component }} is unreachable"
           description: "The monitoring network cannot establish a TCP connection to {{ $labels.component }}. This proves path unreachability, not the dependency's internal root cause."
+
+      - alert: AiChatIngressUnavailable
+        expr: probe_success{job="blackbox-ai-chat",target_kind="ingress",service_name="ai-chat-production"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          evidence_source: external_probe
+        annotations:
+          summary: AI-chat public API ingress is unavailable
+          description: The production JVM may still be healthy, but the public HTTPS health endpoint is unreachable. Check DNS, TLS certificate, firewall, and Nginx before diagnosing application code.

@@ -44,6 +44,7 @@ write_production_env() {
 AICHAT_CUTOVER_ID=${cutover_id}
 AICHAT_PRODUCTION_CONFIRMED=${confirmed}
 AICHAT_SERVICE_NAME=ai-chat-production
+AICHAT_PUBLIC_HEALTH_URL=https://api.dduo.me/healthz
 NACOS_SERVER_ADDR=nacos-v3:8848
 ELASTICSEARCH_SERVER_ADDR=elasticsearch-v9:9200
 EOF
@@ -97,7 +98,7 @@ for index in range(7):
         "scrapePool": "ai-chat-candidate" if index == 0 else "blackbox-ai-chat",
     })
 if os.path.exists(sys.argv[1]):
-    for index in range(7):
+    for index in range(8):
         targets.append({
             "labels": {"service_name": "ai-chat-production"},
             "scrapePool": "ai-chat-production" if index == 0 else "blackbox-ai-chat",

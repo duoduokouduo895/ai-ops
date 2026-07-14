@@ -6,9 +6,11 @@ import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HexFormat;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
+import java.util.regex.Pattern;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -28,6 +30,16 @@ import org.springframework.transaction.annotation.Transactional;
 public class AlertmanagerWebhookService {
 
     private static final Logger log = LoggerFactory.getLogger(AlertmanagerWebhookService.class);
+    private static final Pattern CONTROLLED_IDENTIFIER = Pattern.compile("[A-Za-z0-9._-]+");
+    private static final Pattern SENSITIVE_FIELD = Pattern.compile(
+            "(?i)(password|passwd|token|api[_-]?key|secret|authorization|cookie|session)");
+    private static final Pattern BEARER_SECRET = Pattern.compile("(?i)\\bBearer\\s+[A-Za-z0-9._~+/-]+=*");
+    private static final Pattern ASSIGNED_SECRET = Pattern.compile(
+            "(?i)\\b(password|passwd|token|api[_-]?key|secret|authorization|cookie|session)\\b\\s*[:=]\\s*[^\\s,;]+");
+    private static final Pattern STANDALONE_API_KEY = Pattern.compile("(?i)\\bsk-[A-Za-z0-9_-]{16,}\\b");
+    private static final Pattern URI_USER_INFO = Pattern.compile("(?i)\\b(https?://)[^\\s/@:]+:[^\\s/@]+@");
+    private static final Pattern EMAIL = Pattern.compile("(?i)\\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,}\\b");
+    private static final Pattern CN_MOBILE = Pattern.compile("(?<![A-Za-z0-9])(?:\\+?86[- ]?)?1[3-9]\\d{9}(?!\\d)");
 
     private final JdbcTemplate jdbcTemplate;
     private final ObjectMapper objectMapper;
@@ -57,7 +69,7 @@ public class AlertmanagerWebhookService {
         if (payload.path("truncatedAlerts").asInt(0) > 0) {
             truncatedGroups.increment();
             log.atWarn().addKeyValue("event", "aidiag_alertmanager_group_truncated").addKeyValue("receiver", receiver)
-                    .addKeyValue("groupKey", groupKey).log("Alertmanager webhook group was truncated");
+                    .addKeyValue("groupKeyHash", sha256(groupKey)).log("Alertmanager webhook group was truncated");
         }
 
         var payloadHash = sha256(rawBody);
@@ -65,8 +77,14 @@ public class AlertmanagerWebhookService {
         var accepted = 0;
         var duplicates = 0;
         var incidents = new ArrayList<UUID>();
+        var resolutionTimes = new LinkedHashMap<String, Instant>();
         for (JsonNode alert : alerts) {
             var event = parseAlert(alert, receiver, groupKey, payload, payloadHash);
+            if (groupResolved) {
+                var resolutionTime = event.endsAt() == null ? event.startsAt() : event.endsAt();
+                resolutionTimes.merge(event.correlationKey(), resolutionTime,
+                        (left, right) -> left.isAfter(right) ? left : right);
+            }
             var eventId = insertEvent(event);
             if (eventId == null) {
                 incrementDuplicate(event);
@@ -98,17 +116,18 @@ public class AlertmanagerWebhookService {
             }
         }
         if (groupResolved) {
-            var resolvedAt = resolvedAt(alerts);
-            findActiveIncident(sha256(environmentFor(payload, alerts) + "\n" + receiver + "\n" + groupKey)).ifPresent(incident -> {
-                jdbcTemplate.update("""
+            resolutionTimes.forEach((correlationKey, resolvedAt) -> findActiveIncident(correlationKey).ifPresent(incident -> {
+                var updated = jdbcTemplate.update("""
                         UPDATE incident
                         SET status = 'RESOLVED', resolved_at = ?, last_alert_at = GREATEST(last_alert_at, ?),
                             updated_at = CURRENT_TIMESTAMP
                         WHERE id = ? AND status IN ('OPEN', 'DIAGNOSING', 'DIAGNOSED', 'FAILED')
                           AND last_alert_at <= ?
                         """, timestamp(resolvedAt), timestamp(resolvedAt), incident, timestamp(resolvedAt));
-                incidents.add(incident);
-            });
+                if (updated == 1) {
+                    incidents.add(incident);
+                }
+            }));
         }
         return new WebhookReceipt(accepted, duplicates, incidents.stream().distinct().toList());
     }
@@ -120,19 +139,19 @@ public class AlertmanagerWebhookService {
         }
         var labels = requiredObject(alert, "labels");
         var annotations = alert.path("annotations").isObject() ? alert.path("annotations") : objectMapper.createObjectNode();
-        var alertName = requiredText(labels, "alertname", 128);
-        var serviceName = requiredText(labels, "service_name", 128);
+        var alertName = requiredIdentifier(labels, "alertname", 128);
+        var serviceName = requiredIdentifier(labels, "service_name", 128);
         var severity = requiredText(labels, "severity", 32).toUpperCase(Locale.ROOT);
         if (!List.of("INFO", "WARNING", "CRITICAL").contains(severity)) {
             throw new IllegalArgumentException("unsupported severity");
         }
-        var environment = requiredText(labels, "environment", 64, fallbackEnvironment);
+        var environment = requiredIdentifier(labels, "environment", 64, fallbackEnvironment);
         var startsAt = parseTimestamp(requiredText(alert, "startsAt", 64), "startsAt");
         var endsAt = parseOptionalEnd(alert.path("endsAt").asText(""), startsAt);
         var fingerprint = requiredText(alert, "fingerprint", 128);
-        return new AlertEvent(receiver, groupKey, fingerprint, status, startsAt, endsAt, toJson(labels), toJson(annotations),
-                toJson(payload), payloadHash, sha256(environment + "\n" + receiver + "\n" + groupKey), alertName, serviceName,
-                severity, environment);
+        return new AlertEvent(receiver, groupKey, fingerprint, status, startsAt, endsAt, toJson(sanitizeForStorage(labels)),
+                toJson(sanitizeForStorage(annotations)), toJson(sanitizeForStorage(payload)), payloadHash,
+                sha256(environment + "\n" + receiver + "\n" + groupKey), alertName, serviceName, severity, environment);
     }
 
     private UUID insertEvent(AlertEvent event) {
@@ -162,7 +181,13 @@ public class AlertmanagerWebhookService {
                                       correlation_key, environment, last_alert_at)
                 VALUES (?, ?, ?, ?, 'OPEN', ?, CURRENT_TIMESTAMP, ?, ?, ?)
                 ON CONFLICT (correlation_key) WHERE status IN ('OPEN', 'DIAGNOSING', 'DIAGNOSED', 'FAILED')
-                DO UPDATE SET last_alert_at = GREATEST(incident.last_alert_at, EXCLUDED.last_alert_at), updated_at = CURRENT_TIMESTAMP
+                DO UPDATE SET last_alert_at = GREATEST(incident.last_alert_at, EXCLUDED.last_alert_at),
+                    severity = CASE
+                        WHEN incident.severity = 'CRITICAL' OR EXCLUDED.severity = 'CRITICAL' THEN 'CRITICAL'
+                        WHEN incident.severity = 'WARNING' OR EXCLUDED.severity = 'WARNING' THEN 'WARNING'
+                        ELSE 'INFO'
+                    END,
+                    updated_at = CURRENT_TIMESTAMP
                 RETURNING id
                 """, (resultSet, rowNum) -> UUID.fromString(resultSet.getString("id")), event.alertName() + " on " + event.serviceName(),
                 event.serviceName(), event.alertName(), event.severity(), timestamp(event.startsAt()), event.correlationKey(),
@@ -203,11 +228,76 @@ public class AlertmanagerWebhookService {
         return value;
     }
 
+    private static String requiredIdentifier(JsonNode node, String field, int maximumLength) {
+        return requiredIdentifier(node, field, maximumLength, "");
+    }
+
+    private static String requiredIdentifier(JsonNode node, String field, int maximumLength, String fallback) {
+        var value = requiredText(node, field, maximumLength, fallback);
+        if (!CONTROLLED_IDENTIFIER.matcher(value).matches()) {
+            throw new IllegalArgumentException("invalid " + field);
+        }
+        return value;
+    }
+
+    JsonNode sanitizeForStorage(JsonNode value) {
+        var copy = value.deepCopy();
+        sanitizeInPlace(copy);
+        return copy;
+    }
+
+    private void sanitizeInPlace(JsonNode node) {
+        if (node.isObject()) {
+            var fields = new ArrayList<String>();
+            node.fieldNames().forEachRemaining(fields::add);
+            for (var field : fields) {
+                var child = node.get(field);
+                if (SENSITIVE_FIELD.matcher(field).find()) {
+                    ((com.fasterxml.jackson.databind.node.ObjectNode) node).put(field, "[REDACTED]");
+                } else if (child.isTextual()) {
+                    ((com.fasterxml.jackson.databind.node.ObjectNode) node).put(field, sanitizeText(child.asText()));
+                } else {
+                    sanitizeInPlace(child);
+                }
+            }
+        } else if (node.isArray()) {
+            var array = (com.fasterxml.jackson.databind.node.ArrayNode) node;
+            for (var index = 0; index < array.size(); index++) {
+                var child = array.get(index);
+                if (child.isTextual()) {
+                    array.set(index, objectMapper.getNodeFactory().textNode(sanitizeText(child.asText())));
+                } else {
+                    sanitizeInPlace(child);
+                }
+            }
+        }
+    }
+
+    private static String sanitizeText(String value) {
+        var sanitized = BEARER_SECRET.matcher(value).replaceAll("Bearer [REDACTED]");
+        sanitized = ASSIGNED_SECRET.matcher(sanitized).replaceAll("$1=[REDACTED]");
+        sanitized = STANDALONE_API_KEY.matcher(sanitized).replaceAll("[REDACTED_API_KEY]");
+        sanitized = URI_USER_INFO.matcher(sanitized).replaceAll("$1[REDACTED]@");
+        sanitized = EMAIL.matcher(sanitized).replaceAll("[REDACTED_EMAIL]");
+        return CN_MOBILE.matcher(sanitized).replaceAll("[REDACTED_PHONE]");
+    }
+
     private boolean isResolvedGroup(JsonNode payload, JsonNode alerts) {
         var groupStatus = payload.path("status").asText("").trim().toLowerCase(Locale.ROOT);
         if (!groupStatus.isBlank()) {
             if (!groupStatus.equals("firing") && !groupStatus.equals("resolved")) {
                 throw new IllegalArgumentException("unsupported group status");
+            }
+            var hasFiringAlert = false;
+            for (JsonNode alert : alerts) {
+                var alertStatus = alert.path("status").asText("").trim().toLowerCase(Locale.ROOT);
+                hasFiringAlert |= "firing".equals(alertStatus);
+                if (groupStatus.equals("resolved") && !"resolved".equals(alertStatus)) {
+                    throw new IllegalArgumentException("resolved group contains a non-resolved alert");
+                }
+            }
+            if (groupStatus.equals("firing") && !hasFiringAlert) {
+                throw new IllegalArgumentException("firing group contains no firing alert");
             }
             return groupStatus.equals("resolved");
         }
@@ -217,25 +307,6 @@ public class AlertmanagerWebhookService {
             }
         }
         return true;
-    }
-
-    private static Instant resolvedAt(JsonNode alerts) {
-        Instant latest = Instant.EPOCH;
-        for (JsonNode alert : alerts) {
-            var startsAt = parseTimestamp(alert.path("startsAt").asText(), "startsAt");
-            var endsAt = parseOptionalEnd(alert.path("endsAt").asText(""), startsAt);
-            var eventTime = endsAt == null ? startsAt : endsAt;
-            if (eventTime.isAfter(latest)) {
-                latest = eventTime;
-            }
-        }
-        return latest;
-    }
-
-    private String environmentFor(JsonNode payload, JsonNode alerts) {
-        var firstAlert = alerts.get(0);
-        var labels = requiredObject(firstAlert, "labels");
-        return requiredText(labels, "environment", 64, fallbackEnvironment);
     }
 
     private static JsonNode requiredObject(JsonNode node, String field) {

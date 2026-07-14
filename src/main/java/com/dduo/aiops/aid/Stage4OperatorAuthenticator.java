@@ -36,9 +36,11 @@ public class Stage4OperatorAuthenticator {
             if (separator < 0) {
                 return false;
             }
-            return MessageDigest.isEqual(expectedUsername, decoded.substring(0, separator).getBytes(StandardCharsets.UTF_8))
-                    && MessageDigest.isEqual(expectedPassword,
-                            decoded.substring(separator + 1).getBytes(StandardCharsets.UTF_8));
+            var usernameMatches = MessageDigest.isEqual(expectedUsername,
+                    decoded.substring(0, separator).getBytes(StandardCharsets.UTF_8));
+            var passwordMatches = MessageDigest.isEqual(expectedPassword,
+                    decoded.substring(separator + 1).getBytes(StandardCharsets.UTF_8));
+            return usernameMatches & passwordMatches;
         } catch (IllegalArgumentException exception) {
             return false;
         }

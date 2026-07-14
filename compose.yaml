@@ -111,6 +111,7 @@ services:
       - telemetry
       - middleware
       - nacos
+      - egress
     mem_limit: 128m
     cpus: 0.25
     pids_limit: 128

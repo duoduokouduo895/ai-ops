@@ -105,8 +105,16 @@ public class DiagnosisRunRepository {
                 WHERE id = ? AND status IN ('LEASED', 'COLLECTING', 'ANALYZING', 'VERIFYING', 'GENERATING_REPORT')
                   AND lease_owner = ? AND lease_token = ? AND lease_until > CURRENT_TIMESTAMP
                 """, failureCode, truncate(failureReason), run.id(), run.owner(), run.leaseToken());
-        if (failed != 1 || run.attempt() >= maxAttempts) {
-            return failed == 1;
+        if (failed != 1) {
+            return false;
+        }
+        if (run.attempt() >= maxAttempts) {
+            jdbcTemplate.update("""
+                    UPDATE incident
+                    SET status = 'FAILED', updated_at = CURRENT_TIMESTAMP
+                    WHERE id = ? AND status IN ('OPEN', 'DIAGNOSING')
+                    """, run.incidentId());
+            return true;
         }
         jdbcTemplate.update("""
                 INSERT INTO diagnosis_run (incident_id, attempt, run_kind, status, available_at, previous_run_id)

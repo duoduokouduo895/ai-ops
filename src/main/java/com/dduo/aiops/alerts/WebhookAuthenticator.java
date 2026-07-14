@@ -38,7 +38,9 @@ public class WebhookAuthenticator {
             }
             var username = decoded.substring(0, separator).getBytes(StandardCharsets.UTF_8);
             var password = decoded.substring(separator + 1).getBytes(StandardCharsets.UTF_8);
-            return MessageDigest.isEqual(expectedUsername, username) && MessageDigest.isEqual(expectedPassword, password);
+            var usernameMatches = MessageDigest.isEqual(expectedUsername, username);
+            var passwordMatches = MessageDigest.isEqual(expectedPassword, password);
+            return usernameMatches & passwordMatches;
         } catch (IllegalArgumentException exception) {
             return false;
         }

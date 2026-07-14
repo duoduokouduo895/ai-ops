@@ -77,7 +77,7 @@ public class Stage4AiDiagnosisService {
             repository.completeAttempt(attemptId, "COMPLETED", json(MapBuilder.response(result.advice(), null)), null, null);
             return new PreviewResult(attemptId, "COMPLETED", result.advice(), null, null, false);
         } catch (Stage4ModelUnavailableException exception) {
-            return fallback(attemptId, "MODEL_UNAVAILABLE", exception.getMessage());
+            return fallback(attemptId, "MODEL_UNAVAILABLE", "Model provider is unavailable");
         } catch (TimeoutException exception) {
             return fallback(attemptId, "MODEL_TIMEOUT", "Model response exceeded " + settings.timeoutSeconds() + " seconds");
         } catch (InterruptedException exception) {
@@ -85,7 +85,7 @@ public class Stage4AiDiagnosisService {
             return fallback(attemptId, "MODEL_INTERRUPTED", "Model request was interrupted");
         } catch (ExecutionException exception) {
             if (exception.getCause() instanceof Stage4ModelUnavailableException unavailable) {
-                return fallback(attemptId, "MODEL_UNAVAILABLE", unavailable.getMessage());
+                return fallback(attemptId, "MODEL_UNAVAILABLE", "Model provider is unavailable");
             }
             return fallback(attemptId, "MODEL_FAILURE", "Model request failed");
         } catch (RuntimeException exception) {

@@ -6,7 +6,7 @@ AIDiag 是一个面向 Java 服务的证据驱动型异常诊断平台。它接�
 
 > 当前状态：Stage 0～5.5 已完成，AIDiag / AI-chat V1.0.0 已于 2026-07-14 正式发布。完整发布证据见 [`2026-07-14-v1-production-release.md`](docs/verification/2026-07-14-v1-production-release.md)。
 
-> 生产状态：`api.dduo.chat` 已解析到 GCP `34.150.80.173`，公网 DNS、TLS、Nginx、AI-chat、AIDiag 双目标监控和 GCP 三地域 Uptime Check 均已通过；旧服务器保持停止但暂不删除。
+> 当前主域名：Cloudflare Pages 前端使用 `app.dduo.me`，GCP API 使用 `api.dduo.me`。`dduo.chat` 是历史发布域名，只保留迁移参考，不再作为新配置基线。
 
 ## 核心能力
 
@@ -53,6 +53,18 @@ AI-chat 与 AIDiag 只通过遥测协议和告警协议连接。AIDiag 故障不
 | Nacos 隔离候选 | Nacos Server 3.2.2（tag + digest 双锁定）、独立 MySQL schema、鉴权与最小权限 RBAC |
 
 基础设施镜像在 [`versions.env`](./versions.env) 中同时锁定版本和 digest，避免仅使用浮动 tag。
+
+## 文档导航
+
+| 文档 | 适合解决的问题 |
+|---|---|
+| [`docs/AIDiag-平台介绍.md`](docs/AIDiag-平台介绍.md) | 先理解平台、组件作用、能力与边界 |
+| [`docs/V1-全链路设计与实现.md`](docs/V1-全链路设计与实现.md) | 从 Stage 0 到生产 V1 的完整设计和数据流 |
+| [`docs/AIDiag-核心模块.md`](docs/AIDiag-核心模块.md) | 阅读代码、状态机、数据库和关键不变量 |
+| [`docs/AI-chat-接入指南.md`](docs/AI-chat-接入指南.md) | AI-chat 指标、日志、Trace、Secret、候选和生产接入 |
+| [`docs/其他项目接入指南.md`](docs/其他项目接入指南.md) | 其他服务从可达性到确定性诊断的逐级接入 |
+| [`AIDiag-V1-实施方案.md`](./AIDiag-V1-实施方案.md) | 原始范围、门禁、版本与阶段计划 |
+| [`云端实施操作手册.md`](./云端实施操作手册.md) | 需要在 GCP 主机执行的命令和回滚边界 |
 
 ## 阶段进度
 
@@ -118,9 +130,11 @@ Windows PowerShell：
 
 ## 下一步
 
-cutover `20260713-v1-mvp-cutover-1` 已完成 Phase B：旧 JVM 在 Spring/RabbitMQ shutdown hook 中阻塞，按用户明确确认使用 `SIGKILL` 后，PID、8080 监听和 Java 中间件连接均消失；停写证据与 V4 数据库备份已绑定 cutover 并通过 SHA-256 校验。GCP production 已升级至 `20260714-v1.0.0-rag-model-policy-r12`，Flyway V5、登录/刷新、Guest/用户 SSE、知识库上传、OSS、ES9 + IK、RAG、管理端、Prometheus/Loki/Tempo 关联和精确清理均通过；AIDiag r5 的 production 七个目标全部健康，并完成一次真实 `firing -> Incident -> 报告 -> resolved` 恢复周期。
+cutover `20260713-v1-mvp-cutover-1` 已完成 Phase B：旧 JVM 在 Spring/RabbitMQ shutdown hook 中阻塞，按用户明确确认使用 `SIGKILL` 后，PID、8080 监听和 Java 中间件连接均消失；停写证据与 V4 数据库备份已绑定 cutover 并通过 SHA-256 校验。GCP production 已升级至 `20260714-v1.0.0-rag-model-policy-r12`，Flyway V5、登录/刷新、Guest/用户 SSE、知识库上传、OSS、ES9 + IK、RAG、管理端、Prometheus/Loki/Tempo 关联和精确清理均通过；历史发布时的七个 production 目标全部健康，并完成一次真实 `firing -> Incident -> 报告 -> resolved` 恢复周期。当前源码已将生产契约扩展为第八个公网 HTTPS ingress 目标。
 
-V1 已正式发布，下一条功能版本线是 V1.1 service catalog 配置驱动接入，使新增项目主要通过配置而不是复制 AI-chat 专用代码。发布后 P1 优先处理 TLS 自动续期、聊天中暴露过的模型 Key 轮换、磁盘清理、Alertmanager 重启状态对账和真实旧站恢复演练；这些事项不阻断个人展示版 V1，但在完成前不能宣称企业级高可用。
+V1 已正式发布。2026-07-14 的后续代码审计又收紧了 Webhook 有界读取、告警状态一致性、最终失败状态、Stage 3 查询间续租、告警持久化脱敏、模型输出防泄漏和公网 ingress 探针；这些源码变更在再次发布 GCP 前仍需执行云端 PostgreSQL/Prometheus/Linux lifecycle 门禁。
+
+下一条功能版本线是 V1.1 service catalog 配置驱动接入，使新增项目主要通过配置而不是复制 AI-chat 专用代码。发布后 P1 还包括 TLS 自动续期、模型 Key 轮换、数据留存策略、Alertmanager 重启状态对账和真实旧站恢复演练；这些事项不阻断个人展示版 V1，但在完成前不能宣称企业级高可用。
 
 ## License
 

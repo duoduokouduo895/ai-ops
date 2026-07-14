@@ -51,7 +51,8 @@ public class Stage3DiagnosisWorker {
         var fencedRun = new DiagnosisRunRepository.ClaimedRun(run.id(), run.incidentId(), run.attempt(), run.owner(), run.leaseToken());
         try {
             var incident = repository.incident(run.incidentId());
-            var diagnosis = diagnosisService.diagnose(incident);
+            var diagnosis = diagnosisService.diagnose(incident,
+                    () -> runRepository.heartbeat(fencedRun, leaseSeconds));
             if (!runRepository.heartbeat(fencedRun, leaseSeconds)) {
                 stale.increment();
                 return;
@@ -65,6 +66,10 @@ public class Stage3DiagnosisWorker {
             log.atInfo().addKeyValue("event", "aidiag_stage3_report_completed").addKeyValue("diagnosisRunId", run.id())
                     .addKeyValue("reportId", receipt.get().reportId()).addKeyValue("verificationStatus", diagnosis.verificationStatus())
                     .log("Stage 3 deterministic diagnosis report completed");
+        } catch (RuleBasedDiagnosisService.StaleDiagnosisLeaseException exception) {
+            stale.increment();
+            log.atWarn().addKeyValue("event", "aidiag_stage3_stale_lease").addKeyValue("diagnosisRunId", run.id())
+                    .log("Stage 3 diagnosis stopped because its lease was lost");
         } catch (RuntimeException exception) {
             var retryScheduled = runRepository.scheduleRetry(fencedRun, maxAttempts, retryBackoffSeconds, "STAGE3_DIAGNOSIS_FAILURE",
                     exception.getMessage());

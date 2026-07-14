@@ -9,6 +9,17 @@ runtime_project=ai-chat-candidate
 if [[ "${mode}" == --dual ]]; then
   runtime_project=ai-chat-production
 fi
+
+public_health_url=""
+if [[ "${mode}" == --dual ]]; then
+  production_env="${AICHAT_PRODUCTION_ENV:-/opt/ai-chat/runtime/production.env}"
+  [[ -f "${production_env}" && ! -L "${production_env}" ]] \
+    || { echo "Production runtime config is missing or unsafe" >&2; exit 67; }
+  mapfile -t public_health_matches < <(grep -E '^AICHAT_PUBLIC_HEALTH_URL=' "${production_env}" || true)
+  [[ ${#public_health_matches[@]} -eq 1 ]] \
+    || { echo "AICHAT_PUBLIC_HEALTH_URL must occur exactly once in production.env" >&2; exit 69; }
+  public_health_url="${public_health_matches[0]#*=}"
+fi
 mapfile -t runtime_containers < <(docker ps \
   --filter "label=com.docker.compose.project=${runtime_project}" \
   --filter label=com.docker.compose.service=ai-chat-backend --format '{{.ID}}')
@@ -32,7 +43,7 @@ trap cleanup EXIT
 docker exec "${prometheus_container}" wget -qO- 'http://localhost:9090/api/v1/targets?state=active' >"${payload_file}"
 docker exec "${prometheus_container}" wget -qO- \
   'http://localhost:9090/api/v1/query?query=probe_success%7Bjob%3D%22blackbox-ai-chat%22%7D' >"${probe_file}"
-python3 - "${mode}" "${payload_file}" "${probe_file}" <<'PY'
+python3 - "${mode}" "${payload_file}" "${probe_file}" "${public_health_url}" <<'PY'
 import json
 import sys
 
@@ -61,6 +72,7 @@ expected = {
         "rabbitmq:5672",
         "elasticsearch-v9:9200",
         "nacos-v3:8848",
+        sys.argv[4],
     },
 }
 expected_probes = {
@@ -120,7 +132,7 @@ echo "ai_chat_monitoring_verification=PASS"
 echo "mode=${mode#--}"
 if [[ "${mode}" == --dual ]]; then
   echo "candidate_targets=7-retained"
-  echo "production_targets=7-up"
+  echo "production_targets=8-up"
 else
   echo "candidate_targets=7-up"
   echo "production_targets=inactive"

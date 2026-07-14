@@ -1,5 +1,11 @@
 # AIDiag / AI-chat V1 生产切换手册
 
+> **历史切换证据，不是当前重发基线。** 本手册记录了 2026-07-14 从旧服务器切换到 GCP 时的
+> `api.dduo.chat` 和 7 个 production target，不修改历史命令和证据。当前基线是
+> `app.dduo.me` / `api.dduo.me` 与 8 个 production target（包含公网 HTTPS ingress）。
+> 新发布请同时遵循 [`../../云端实施操作手册.md`](../../云端实施操作手册.md)
+> 与 [`../AI-chat-接入指南.md`](../AI-chat-接入指南.md) 的当前门禁。
+
 ## 1. 目标与不可越过的边界
 
 本手册把已通过验收的 AI-chat、Nacos 3.2.2、Elasticsearch 9.3.2 + IK 从候选状态切换到

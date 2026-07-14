@@ -51,6 +51,7 @@ class ProductionMonitoringContractTests {
         assertThat(alerts)
                 .contains("service_name!=\"ai-chat-candidate\"")
                 .contains("service_name=\"ai-chat-candidate\"")
+                .contains("target_kind=\"ingress\",service_name=\"ai-chat-production\"")
                 .contains("unless on()")
                 .contains("count(up{job=\"ai-chat-production\"})");
         assertThat(alerts)
@@ -72,13 +73,14 @@ class ProductionMonitoringContractTests {
         assertThat(activation)
                 .contains("ACTIVATE_AI_CHAT_PRODUCTION_MONITORING", "AICHAT_CUTOVER_ID=${cutover_id}")
                 .contains("elasticsearch-v9:9200", "nacos-v3:8848")
+                .contains("AICHAT_PUBLIC_HEALTH_URL", "target_kind\": \"ingress")
                 .contains("AICHAT_PRODUCTION_CONFIRMED true")
                 .contains("OLD_PRODUCTION_WRITERS_STOPPED=true", "PRODUCTION_ACTIVATION_APPROVED=true")
                 .contains("sha256sum --check", "gzip --test")
                 .contains("AI-chat candidate must be stopped before production monitoring activation")
                 .contains("Candidate monitoring definitions must remain present")
                 .contains("flock -n 9")
-                .contains("production_targets=7", "candidate_targets=unchanged");
+                .contains("production_targets=8", "candidate_targets=unchanged");
         assertThat(rollback)
                 .contains("ROLLBACK_AI_CHAT_PRODUCTION_MONITORING")
                 .contains("Stop AI-chat production before removing its monitoring targets")

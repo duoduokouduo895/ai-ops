@@ -403,9 +403,9 @@ AI-chat 通过遥测协议接入，不依赖 AIDiag 的业务代码。V1 发布�
 
 V1 推荐把 AI-chat backend 以独立 Compose Project 部署到现有 GCP Docker 主机，并加入 AIDiag 已创建的外部网络 `aidiag-telemetry`。AI-chat 业务入口继续由既有反向代理提供，管理端口、`/actuator/prometheus` 和 Alloy OTLP 4318 不映射到公网。
 
-截至 2026-07-13，`app.dduo.chat` 是 Cloudflare Pages 前端，本地最新前端通过 `VITE_API_BASE_URL=https://api.dduo.chat/api` 访问后端；`api.dduo.chat` 仍解析到旧云服务器 `119.29.109.190`。Stage 5 不先重发前端，而是在 GCP `34.150.80.173` 将新 backend 绑定到 loopback 候选端口（初始为 `127.0.0.1:18082`），通过 SSH 和内部网络完成验收。GCP 已有 Nginx 占用 80/443，可在候选通过后增加 `api.dduo.chat` virtual host。
+2026-07-14 的 V1 历史切换已经完成：AI-chat backend 在 GCP `34.150.80.173` 以 loopback 端口运行，并通过 Nginx/TLS 对外服务。随后因旧域名续费成本，主域名无痛迁移为 Cloudflare Pages `app.dduo.me` 与 GCP API `api.dduo.me`；新前端构建只允许 `VITE_API_BASE_URL=https://api.dduo.me/api`。`dduo.chat` 仅作为历史发布与迁移参考，不再写入新生产配置。
 
-正式切换前必须预置 TLS、降低 DNS TTL，并保留旧 A 记录。维护窗口内由用户在 DNSPod 把 `api.dduo.chat` 切到 `34.150.80.173`；验收失败时恢复 `119.29.109.190`。不得在候选实例尚未通过业务、数据迁移、Nacos、健康和遥测门禁前修改 DNS，也不得把容器 8080/management port 直接暴露公网。
+当前生产配置必须包含 `AICHAT_PUBLIC_HEALTH_URL=https://api.dduo.me/healthz`。AIDiag 在容器内 application probe 之外增加独立公网 HTTPS ingress probe，用于区分 JVM 正常但 DNS、TLS、443、防火墙或 Nginx 异常。容器 8080、management、Prometheus、Grafana 和 OTLP 仍不得直接暴露公网。
 
 AI-chat 和 AIDiag 必须保持独立发布目录、独立回滚指针和独立资源上限；不得把两个仓库复制到同一 release，也不得让一次 AIDiag 回滚重启 AI-chat。AI-chat backend 初始内存上限为 1.5～2 GiB，发布前后记录宿主机可用内存、磁盘、容器重启次数和 JVM heap。
 
@@ -718,12 +718,24 @@ Smoke 功能使用 `POST /internal/smoke/telemetry`，且只在 `AIDIAG_SMOKE_EN
 - [x] [Nacos 应用验收] AI-chat 使用 mode-specific `spring.application.name` 注册为 `ai-chat-candidate`，恰有 1 个健康实例；受控停止隔离 Nacos 时应用依靠本地配置缓存保持健康且零重启，Nacos 恢复后自动重新注册；客户端 Secret 未进入日志。现有 Nacos 2.1.1 未停止或替换；
 - [x] [Elasticsearch 兼容门禁] 创建独立 Elasticsearch 9.3.2 + IK 9.3.2 候选，锁定官方 amd64 镜像 digest 与 IK ZIP SHA-256；候选使用独立 config/data volumes、鉴权与索引级最小权限，端口仅绑定 loopback/私网。IK 中文 Mapping/检索、业务索引、dense_vector KNN 与权限负向测试全部通过，现有 Elasticsearch 8.13.4 保持运行且零重启；
 - [x] [候选门禁] AI-chat release `20260713-v1-nacos3-es9-ik-candidate-r4` 通过 166 项镜像内测试、健康/资源/只读根文件系统、Nacos 注册、真实 Guest SSE、MySQL 持久化、ES9 写入/删除、IK Mapping、Prometheus/Loki/Tempo 关联和精确清理门禁；Nginx/DNS 与生产写任务保持不变；
-- [x] [双目标监控本地实现] candidate metrics/Blackbox 常驻并改用 `nacos-v3-candidate`、`elasticsearch-v9-candidate` 真实别名；production metrics/应用/五依赖使用 root-owned Prometheus `file_sd` 按 cutover 激活，Alloy、告警、固定诊断规则和 Grafana service selector 同时支持 `ai-chat-production`；激活失败自动撤回新 target，回滚只归档受管文件且拒绝在 production 运行时移除监控；
-- [x] [双目标监控云端门禁] Phase B 已按 cutover `20260713-v1-mvp-cutover-1` 完成备份、旧 writer 停写、批准、candidate 停止与 production target 激活；Phase C 的 production 7/7、Loki production 日志、Tempo Trace、真实告警、自动建单、确定性报告和恢复周期均通过。candidate 目标定义继续保留，计划停写时不会产生 application 假告警；
+- [x] [双目标监控本地实现] candidate metrics/Blackbox 常驻并改用 `nacos-v3-candidate`、`elasticsearch-v9-candidate` 真实别名；production metrics/应用/五依赖使用 root-owned Prometheus `file_sd` 按 cutover 激活，Alloy、告警、固定诊断规则和 Grafana service selector 同时支持 `ai-chat-production`；2026-07-14 审计后新增第八个 `api.dduo.me` 公网 HTTPS ingress target 和独立告警；激活失败自动撤回新 target，回滚只归档受管文件且拒绝在 production 运行时移除监控；
+- [x] [双目标监控云端门禁] Phase B 已按 cutover `20260713-v1-mvp-cutover-1` 完成备份、旧 writer 停写、批准、candidate 停止与 production target 激活；历史 Phase C 发布时的 production 7/7、Loki production 日志、Tempo Trace、真实告警、自动建单、确定性报告和恢复周期均通过。candidate 目标定义继续保留，计划停写时不会产生 application 假告警；新增第八个 ingress target 的源码门禁已通过，但再次发布前仍需重跑 Linux lifecycle 和 production 8/8 验证；
 - [x] [可观测门禁] 启动早期日志与 production 脱敏日志已通过受控文件采集到 Loki，production Trace 已在 Tempo 关联；主机外 HTTPS Uptime Check、通知渠道和告警策略已启用。Grafana 继续保持 loopback 或经 TLS/鉴权反向代理访问；
 - [ ] [发布后 P1 Secret] 用户选择不在本次窗口轮换聊天中暴露过的模型 Key；Nacos、JWT、数据库、中间件和 OSS 凭据也继续按逐项回滚策略轮换。该风险已明确接受，仅允许把 V1 定位为个人展示版，完成前不能宣称生产级 Secret 治理；
 - [x] [生产切换] Phase B 停写/备份、Phase C 登录/SSE/知识库/OSS/IK/RAG/管理端/遥测回归和 Phase D DNS/TLS/外部监控/30 分钟观察均完成；Google、Cloudflare、阿里公共 DNS 均返回 GCP，失败回滚仍按记录恢复旧实例/upstream/A 记录；
 - [x] [发布归档] SBOM、镜像 digest、源码摘要、测试/健康/业务/遥测证据和已知限制已归档；V1 tag 指向实际部署 commit，完整记录见 [`docs/verification/2026-07-14-v1-production-release.md`](docs/verification/2026-07-14-v1-production-release.md)。
+
+#### 2026-07-14 发布后核心代码审计收紧
+
+- [x] Webhook 改为输入流有界读取，空 JSON object、chunked 超限、非法 group 状态和受控标识符均在写库前拒绝；
+- [x] 告警 payload、labels、annotations 持久化前递归脱敏，原始 body 只保留 SHA-256；truncated group 日志只记录 groupKey hash；
+- [x] 活动 Incident severity 只升不降；最终重试失败时 Incident 与 run 同步进入 `FAILED`；
+- [x] Stage 3 在每次 Prometheus/Loki/Tempo 查询前续租，lease 丢失立即停止且不触发陈旧写入；
+- [x] Stage 4 不透出 Provider 原始异常 message，并拒绝包含 Secret、邮箱、手机号或 URI user-info 的模型输出；
+- [x] Java 版本、Spring Boot、Spring AI、springdoc、Resilience4j、Maven、OTel Agent 写入统一 `versions.env` 并增加漂移测试；
+- [x] 新增平台介绍、全链路、核心模块、AI-chat 接入和其他项目接入文档；
+- [ ] 在 GCP 对同一源码执行 PostgreSQL 集成测试、Docker build、`promtool`、Alloy、production monitoring lifecycle 和 8/8 target 验证后，才允许发布该审计 release；
+- [ ] AI-chat Tika 2.9.4 → LangChain4j 期望的 3.2.3 属于大版本升级，等待用户确认并完成 PDF/Word/文本解析回归。
 
 截至 2026-07-14，V1 的业务闭环、Nacos 3.2.2、Elasticsearch 9.3.2 + IK、AI-chat production、AIDiag 双目标监控、DNS/TLS、三地域 Uptime Check 和 30 分钟稳定观察均已通过，个人展示版 V1 正式发布。历史 Secret 轮换、TLS 自动续期、磁盘清理、Alertmanager 状态对账和真实旧站恢复演练作为发布后 P1 保留；这些已知限制不影响当前单机展示版可用性，但阻止项目宣称企业级高可用。完整证据见 [`docs/verification/2026-07-14-v1-production-release.md`](docs/verification/2026-07-14-v1-production-release.md)。
 

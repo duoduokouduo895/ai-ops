@@ -130,6 +130,37 @@ class Stage2PostgresIntegrationTests {
     }
 
     @Test
+    void resolvedGroupClosesEveryEnvironmentCorrelationIndependently() {
+        var scope = scope("payment-service");
+        var secondAlert = scope.payload().withArray("alerts").addObject();
+        secondAlert.put("status", "firing");
+        secondAlert.put("fingerprint", "stage2-it-second-" + UUID.randomUUID());
+        secondAlert.put("startsAt", "2026-07-12T00:00:00Z");
+        var secondLabels = secondAlert.putObject("labels");
+        secondLabels.put("alertname", "Stage2IntegrationTest");
+        secondLabels.put("service_name", "payment-service");
+        secondLabels.put("severity", "warning");
+        secondLabels.put("environment", "integration-test-secondary");
+        secondAlert.putObject("annotations").put("summary", "integration test only");
+        var secondCorrelationKey = correlationKey("integration-test-secondary", scope.receiver(), scope.groupKey());
+        scopes.add(new TestScope(scope.receiver(), scope.groupKey(), secondCorrelationKey, scope.payload(), scope.rawBody()));
+
+        webhookService.accept(scope.payload(), rawBody(scope.payload()));
+        scope.payload().put("status", "resolved");
+        for (var alertNode : scope.payload().withArray("alerts")) {
+            var alert = (ObjectNode) alertNode;
+            alert.put("status", "resolved");
+            alert.put("endsAt", "2026-07-12T00:05:00Z");
+        }
+
+        webhookService.accept(scope.payload(), rawBody(scope.payload()));
+
+        assertThat(jdbcTemplate.queryForList("""
+                SELECT status FROM incident WHERE correlation_key IN (?, ?) ORDER BY correlation_key
+                """, String.class, scope.correlationKey(), secondCorrelationKey)).containsExactly("RESOLVED", "RESOLVED");
+    }
+
+    @Test
     void expiredWorkerCannotWriteStageTwoHandoffAudit() {
         var scope = scope("payment-service");
         var run = directRun(scope, "COLLECTING");

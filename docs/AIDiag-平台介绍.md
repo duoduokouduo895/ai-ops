@@ -122,4 +122,3 @@ API 使用独立文件 Secret 的 Basic Auth，浏览器不应直接持有凭据
 4. [`AI-chat-接入指南.md`](AI-chat-接入指南.md)；
 5. [`其他项目接入指南.md`](其他项目接入指南.md)；
 6. [`../AIDiag-V1-实施方案.md`](../AIDiag-V1-实施方案.md) 和 [`verification/`](verification/) 中的逐阶段证据。
-

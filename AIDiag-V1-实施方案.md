@@ -735,7 +735,7 @@ Smoke 功能使用 `POST /internal/smoke/telemetry`，且只在 `AIDIAG_SMOKE_EN
 - [x] Java 版本、Spring Boot、Spring AI、springdoc、Resilience4j、Maven、OTel Agent 写入统一 `versions.env` 并增加漂移测试；
 - [x] 新增平台介绍、全链路、核心模块、AI-chat 接入和其他项目接入文档；
 - [ ] 在 GCP 对同一源码执行 PostgreSQL 集成测试、Docker build、`promtool`、Alloy、production monitoring lifecycle 和 8/8 target 验证后，才允许发布该审计 release；
-- [ ] AI-chat Tika 2.9.4 → LangChain4j 期望的 3.2.3 属于大版本升级，等待用户确认并完成 PDF/Word/文本解析回归。
+- [x] AI-chat 已移除显式 Tika 2.9.4 覆盖，统一使用 LangChain4j 传递管理的 3.2.3，并完成 PDF、DOCX、文本解析回归及全量 `mvn verify`。
 
 截至 2026-07-14，V1 的业务闭环、Nacos 3.2.2、Elasticsearch 9.3.2 + IK、AI-chat production、AIDiag 双目标监控、DNS/TLS、三地域 Uptime Check 和 30 分钟稳定观察均已通过，个人展示版 V1 正式发布。历史 Secret 轮换、TLS 自动续期、磁盘清理、Alertmanager 状态对账和真实旧站恢复演练作为发布后 P1 保留；这些已知限制不影响当前单机展示版可用性，但阻止项目宣称企业级高可用。完整证据见 [`docs/verification/2026-07-14-v1-production-release.md`](docs/verification/2026-07-14-v1-production-release.md)。
 

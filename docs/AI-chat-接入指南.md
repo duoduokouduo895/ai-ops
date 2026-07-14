@@ -216,7 +216,7 @@ bash /opt/aidiag/current/scripts/cloud-verify-ai-chat-monitoring.sh --candidate-
 ## 11. 当前注意事项
 
 - 本次本地审计加固在获得明确确认前不会自动部署 GCP；
-- Tika 2→3 仍是待确认的大版本解析器升级；
+- Tika 已从显式 2.9.4 覆盖收敛为 LangChain4j 传递管理的 3.2.3，并通过 PDF、DOCX、文本解析回归；该源码变更仍需随下一次受控 AI-chat release 发布；
 - AI-chat 的同一 `clientMessageId` 重试可避免重复数据库消息，但尚未实现完整的模型响应 replay；
 - 模型回答已返回但最终 AI 消息持久化失败时，当前优先保证响应可用性，后续应增加补偿/告警；
 - 登录防暴力破解和 Turnstile 仍应作为后续安全项；

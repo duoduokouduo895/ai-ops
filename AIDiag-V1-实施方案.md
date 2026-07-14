@@ -704,7 +704,7 @@ Smoke 功能使用 `POST /internal/smoke/telemetry`，且只在 `AIDIAG_SMOKE_EN
 - [x] [P1 辅助页面] 在既有 `frontend_admin` 增加智能运维页面，由 ADMIN BFF 访问 AIDiag；配置错误采用 fail-open integration，即只关闭运维集成、不阻断 AI-chat 主应用启动；
 - [x] [发布收紧] Compose 使用不可变 release 的真实路径挂载配置；激活失败回滚时从旧 release 重建共享标签镜像，避免“软链接已回滚、镜像未回滚”；
 - [ ] [P1 启动证据] 安全采集 Docker stdout/stderr，覆盖 JVM 在文件 logger 初始化前失败的日志；不得直接把未受控 Docker socket 暴露给业务容器；
-- [ ] [P1 主机外监控] 增加位于 GCP 主机之外的 HTTPS/主机可用性检查，覆盖主机、Docker daemon、同机监控平面整体失联。
+- [x] [P1 主机外监控] GCP 三地域 Uptime Check 每 60 秒从主机外验证 DNS、TLS、Nginx 和 AI-chat health，并绑定 Email 通知与双区域连续失败告警；它能发现主机/Docker/同机监控平面整体失联，但不能区分三者根因。
 
 门禁：AI-chat 停止时，Grafana/Prometheus/Blackbox 仍存活且应用探针变为 0；任一中间件网络不可达时仅对应 component 变为 0；未认证只读 API 返回 401，越界分页返回 400；Admin 集成失败不得影响聊天主链。当前独立入口云端验收见 [`docs/verification/2026-07-13-stage5-4.md`](docs/verification/2026-07-13-stage5-4.md)。
 
@@ -720,12 +720,12 @@ Smoke 功能使用 `POST /internal/smoke/telemetry`，且只在 `AIDIAG_SMOKE_EN
 - [x] [候选门禁] AI-chat release `20260713-v1-nacos3-es9-ik-candidate-r4` 通过 166 项镜像内测试、健康/资源/只读根文件系统、Nacos 注册、真实 Guest SSE、MySQL 持久化、ES9 写入/删除、IK Mapping、Prometheus/Loki/Tempo 关联和精确清理门禁；Nginx/DNS 与生产写任务保持不变；
 - [x] [双目标监控本地实现] candidate metrics/Blackbox 常驻并改用 `nacos-v3-candidate`、`elasticsearch-v9-candidate` 真实别名；production metrics/应用/五依赖使用 root-owned Prometheus `file_sd` 按 cutover 激活，Alloy、告警、固定诊断规则和 Grafana service selector 同时支持 `ai-chat-production`；激活失败自动撤回新 target，回滚只归档受管文件且拒绝在 production 运行时移除监控；
 - [x] [双目标监控云端门禁] Phase B 已按 cutover `20260713-v1-mvp-cutover-1` 完成备份、旧 writer 停写、批准、candidate 停止与 production target 激活；Phase C 的 production 7/7、Loki production 日志、Tempo Trace、真实告警、自动建单、确定性报告和恢复周期均通过。candidate 目标定义继续保留，计划停写时不会产生 application 假告警；
-- [ ] [可观测门禁] 启动早期日志与 production 脱敏日志已通过受控文件采集到 Loki，production Trace 已在 Tempo 关联；仍需完成主机外 HTTPS/主机可用性检查。Grafana 继续保持 loopback 或经 TLS/鉴权反向代理访问；
-- [ ] [Secret 门禁] 轮换曾经进入聊天记录或 Git 历史的 DeepSeek、Nacos、JWT、数据库、中间件和 OSS 凭据，并逐项验证旧实例回滚策略；
-- [ ] [生产切换] Phase B 已完成：旧实例已停止，PID、8080 和 Java 中间件连接均消失，停写证据与数据库备份已校验；Phase C 已完成 Flyway V5、production 启动、Guest SSE、持久化、Nacos/ES9 + IK、遥测和告警恢复闭环；GCP TLS/Nginx 已预置，本机与主机外 `--resolve` 均通过。仍需补做用户登录、知识库上传、OSS/RAG 与管理端生产回归，并经新的明确确认执行 Phase D DNS 切换；失败时按记录恢复旧实例/upstream/A 记录；
-- [ ] [发布归档] 归档 SBOM、镜像 digest、测试/Compose/健康/业务/遥测证据、已知限制和回滚演练结果，创建 V1 tag 后才对外声明第一版发布。
+- [x] [可观测门禁] 启动早期日志与 production 脱敏日志已通过受控文件采集到 Loki，production Trace 已在 Tempo 关联；主机外 HTTPS Uptime Check、通知渠道和告警策略已启用。Grafana 继续保持 loopback 或经 TLS/鉴权反向代理访问；
+- [ ] [发布后 P1 Secret] 用户选择不在本次窗口轮换聊天中暴露过的模型 Key；Nacos、JWT、数据库、中间件和 OSS 凭据也继续按逐项回滚策略轮换。该风险已明确接受，仅允许把 V1 定位为个人展示版，完成前不能宣称生产级 Secret 治理；
+- [x] [生产切换] Phase B 停写/备份、Phase C 登录/SSE/知识库/OSS/IK/RAG/管理端/遥测回归和 Phase D DNS/TLS/外部监控/30 分钟观察均完成；Google、Cloudflare、阿里公共 DNS 均返回 GCP，失败回滚仍按记录恢复旧实例/upstream/A 记录；
+- [x] [发布归档] SBOM、镜像 digest、源码摘要、测试/健康/业务/遥测证据和已知限制已归档；V1 tag 指向实际部署 commit，完整记录见 [`docs/verification/2026-07-14-v1-production-release.md`](docs/verification/2026-07-14-v1-production-release.md)。
 
-截至 2026-07-14，V1 的业务闭环、Nacos 3.2.2、Elasticsearch 9.3.2 + IK、AI-chat production 核心链路和 AIDiag 双目标监控均已通过。当前剩余发布阻塞是 Phase C 完整业务回归、Phase D、历史 Secret 逐项轮换、主机外监控、最终回滚演练与发布归档。旧 AI-chat 已停止而 DNS 仍指向旧地址，因此公开 API 当前处于维护不可用状态；在入口切换和外部验收完成前不能把新版 AI-chat 或 AIDiag V1 标记为正式生产发布。云端执行证据见 [`docs/verification/2026-07-14-v1-phase-b-c-cloud.md`](docs/verification/2026-07-14-v1-phase-b-c-cloud.md)。
+截至 2026-07-14，V1 的业务闭环、Nacos 3.2.2、Elasticsearch 9.3.2 + IK、AI-chat production、AIDiag 双目标监控、DNS/TLS、三地域 Uptime Check 和 30 分钟稳定观察均已通过，个人展示版 V1 正式发布。历史 Secret 轮换、TLS 自动续期、磁盘清理、Alertmanager 状态对账和真实旧站恢复演练作为发布后 P1 保留；这些已知限制不影响当前单机展示版可用性，但阻止项目宣称企业级高可用。完整证据见 [`docs/verification/2026-07-14-v1-production-release.md`](docs/verification/2026-07-14-v1-production-release.md)。
 
 总验收：AI-chat 的真实告警可生成引用其真实遥测证据的确定性诊断报告；数据采集不包含 Prompt、回答、用户/会话标识或 Secret；模型失败不影响规则报告；AIDiag 故障不阻断 AI-chat 主业务；部署和回滚均不要求手工上传 Jar。
 
@@ -746,7 +746,7 @@ Smoke 功能使用 `POST /internal/smoke/telemetry`，且只在 `AIDIAG_SMOKE_EN
 - [x] 完成 AI-chat 独立 Docker 构建、私有 telemetry 网络和回滚基线；
 - [x] 完成 AI-chat 遥测隐私审查后再允许 Loki/Tempo 采集；
 - [x] 完成四类 AI-chat 规则、隔离故障验收和 Stage 5.4 独立故障入口；Admin 运维页只作为辅助入口，不与 AI-chat 共用救援职责。
-- [ ] 完成 Stage 5.5 剩余的生产完整业务回归、Phase D、Secret 轮换、主机外监控、回滚演练与发布归档门禁后发布 V1；Phase B 和 Phase C 核心链路已经执行，后续步骤固化在 [`docs/release/V1-production-cutover-runbook.md`](docs/release/V1-production-cutover-runbook.md)。
+- [x] 完成 Stage 5.5 的完整业务回归、Phase D、主机外监控、30 分钟观察与发布归档，正式发布个人展示版 V1；Secret 轮换和真实旧站恢复演练按已接受风险转为发布后 P1。
 
 ---
 

@@ -29,7 +29,7 @@ Phase A 盘点时 GCP 约 15 GiB 内存、无 Swap，且磁盘使用率已超过
 - Phase B 的 `CONFIRMED=true`、数据库备份、旧 writer 停止与批准证据、candidate 停止、互斥锁和
   production target 激活均已通过；
 - AI-chat production 已从首次启动 release r7 升级到 `20260714-v1.0.0-rag-model-policy-r12`，当前为 `healthy/restart 0`，仅绑定
-  loopback。GCP Nginx/TLS 已指向新 AI-chat 并通过主机外 `--resolve`；DNS 尚未切换。旧线上实例已经停止，
+  loopback。GCP Nginx/TLS 已指向新 AI-chat，DNS 已切到 `34.150.80.173` 并完成主机外真实域名验证。旧线上实例已经停止，
   只能通过 root-only 恢复包回退。
 - 旧服务器 `119.29.109.190` 的 ED25519 指纹已由用户确认，公钥登录已通过。线上 Jar SHA-256 为
   `3cbee08e04cf10d04ea62ab5577df1e9f0f55c7c813cc199fcfdb81247440688`；但 systemd 引用的启动脚本、
@@ -149,9 +149,8 @@ production target 尚未激活，候选与旧线上继续运行。
 
 ### Phase D：入口切换与外部监控
 
-> 执行状态（2026-07-14）：步骤 1～3 已完成，本机及主机外 `--resolve` 均为 TLS verify 0、health 200、
-> protected API 401；步骤 4～6 未执行。旧实例已停止且 DNS 仍指向旧地址，公开 API当前不可用；DNS
-> 修改仍需要新的明确确认。
+> 执行状态（2026-07-14）：已完成。DNS 已切到 `34.150.80.173`；Google、Cloudflare、阿里公共 DNS、
+> 真实公网 TLS/health/CORS、GCP 三地域 Uptime Check、Email 告警和 30 分钟稳定观察均通过。
 
 1. 为 `api.dduo.chat` 准备至少七天有效且证书/私钥匹配的正式 TLS 文件；自签名证书不能通过门禁；
 2. 使用 AI-chat release 中的 `cloud-activate-production-nginx.sh` 原子安装 upstream 到

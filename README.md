@@ -4,9 +4,9 @@ AIDiag 是一个面向 Java 服务的证据驱动型异常诊断平台。它接�
 
 平台当前重点接入 **AI-chat**：通过私有遥测网络监控候选与按 cutover 激活的生产实例，不侵入 AI-chat 业务代码，也不会把 Prompt、回答、用户 ID、会话 ID 或 Secret 写入运维遥测。
 
-> 当前状态：Stage 0～4、Stage 5.1～5.4 已完成；Stage 5.5 的 Phase A～C 和 Phase D 入口预置均已完成。V1 发布候选已通过完整业务回归，尚待 DNS 切换、外部监控、30 分钟观察和最终归档，因此暂不对外声明正式发布。
+> 当前状态：Stage 0～5.5 已完成，AIDiag / AI-chat V1.0.0 已于 2026-07-14 正式发布。完整发布证据见 [`2026-07-14-v1-production-release.md`](docs/verification/2026-07-14-v1-production-release.md)。
 
-> 维护状态：旧服务器 AI-chat 已停止且 `api.dduo.chat` 仍解析到旧地址 `119.29.109.190`，因此公开 API 当前不可用。GCP TLS/Nginx 已预置并通过主机外 `--resolve` 验证，但 DNS 尚未切换；未经新的明确确认不得修改 DNS。
+> 生产状态：`api.dduo.chat` 已解析到 GCP `34.150.80.173`，公网 DNS、TLS、Nginx、AI-chat、AIDiag 双目标监控和 GCP 三地域 Uptime Check 均已通过；旧服务器保持停止但暂不删除。
 
 ## 核心能力
 
@@ -49,7 +49,7 @@ AI-chat 与 AIDiag 只通过遥测协议和告警协议连接。AIDiag 故障不
 | 指标与告警 | Prometheus 3.13.1、Alertmanager 0.33.1 |
 | 日志与 Trace | Grafana Alloy 1.17.1、Loki 3.7.3、Tempo 3.0.2、OpenTelemetry Java Agent 2.29.0 |
 | 可视化 | Grafana 13.1.0 |
-| AI-chat 发布候选 | Java 21、Spring Boot 4.0.7、Spring Cloud 2025.1.2、Spring Cloud Alibaba 2025.1.0.0、Nacos Client 3.1.1、LangChain4j 1.15.1 |
+| AI-chat production | Java 21、Spring Boot 4.0.7、Spring Cloud 2025.1.2、Spring Cloud Alibaba 2025.1.0.0、Nacos Client 3.1.1、LangChain4j 1.15.1 |
 | Nacos 隔离候选 | Nacos Server 3.2.2（tag + digest 双锁定）、独立 MySQL schema、鉴权与最小权限 RBAC |
 
 基础设施镜像在 [`versions.env`](./versions.env) 中同时锁定版本和 digest，避免仅使用浮动 tag。
@@ -67,7 +67,7 @@ AI-chat 与 AIDiag 只通过遥测协议和告警协议连接。AIDiag 故障不
 | Stage 5.2 | 已完成发布 | 四类 AI-chat 规则、Dashboard、自动建单传输验收 |
 | Stage 5.3 | 已完成 | 隔离 contract lab、四类证据闭环、恢复、DeepSeek 联动与评测归档 |
 | Stage 5.4 | 独立入口已发布 | Blackbox 外部探针、独立 Grafana 故障入口、鉴权只读 API；Admin 为辅助入口 |
-| Stage 5.5 | 发布候选 | Phase A～C 与 Phase D 入口预置完成；GCP production、Flyway V5、双目标 7/7、登录/SSE/知识库/OSS/IK/RAG/管理端和告警恢复闭环已验收；待 DNS、外部监控、30 分钟观察与归档 |
+| Stage 5.5 | 已完成 | Phase A～D、完整业务回归、DNS、三地域外部监控、30 分钟稳定观察和发布证据归档均通过 |
 
 完整范围、门禁和遗留风险请阅读 [`AIDiag-V1-实施方案.md`](./AIDiag-V1-实施方案.md)。云端人工操作与回滚说明位于 [`云端实施操作手册.md`](./云端实施操作手册.md)。
 
@@ -120,7 +120,7 @@ Windows PowerShell：
 
 cutover `20260713-v1-mvp-cutover-1` 已完成 Phase B：旧 JVM 在 Spring/RabbitMQ shutdown hook 中阻塞，按用户明确确认使用 `SIGKILL` 后，PID、8080 监听和 Java 中间件连接均消失；停写证据与 V4 数据库备份已绑定 cutover 并通过 SHA-256 校验。GCP production 已升级至 `20260714-v1.0.0-rag-model-policy-r12`，Flyway V5、登录/刷新、Guest/用户 SSE、知识库上传、OSS、ES9 + IK、RAG、管理端、Prometheus/Loki/Tempo 关联和精确清理均通过；AIDiag r5 的 production 七个目标全部健康，并完成一次真实 `firing -> Incident -> 报告 -> resolved` 恢复周期。
 
-下一步不是重复 Phase B/C，也不需要再次配置 TLS/Nginx；只需将 DNS 切到 GCP、创建独立外部监控并观察至少 30 分钟，然后归档 V1 tag。当前旧实例已停而 DNS 仍指向旧地址，公开 API 处于维护不可用状态。历史 Secret 轮换和真实旧站回滚演练仍保留为发布后的安全债务；在稳定窗口后开始 V1.1 service catalog 配置驱动改造。
+V1 已正式发布，下一条功能版本线是 V1.1 service catalog 配置驱动接入，使新增项目主要通过配置而不是复制 AI-chat 专用代码。发布后 P1 优先处理 TLS 自动续期、聊天中暴露过的模型 Key 轮换、磁盘清理、Alertmanager 重启状态对账和真实旧站恢复演练；这些事项不阻断个人展示版 V1，但在完成前不能宣称企业级高可用。
 
 ## License
 

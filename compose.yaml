@@ -28,7 +28,7 @@ services:
       - no-new-privileges:true
 
   aidiag-backend:
-    image: aidiag-backend:0.1.0
+    image: aidiag-backend:1.0.0
     build:
       context: .
       dockerfile: Dockerfile
@@ -68,7 +68,7 @@ services:
       AIDIAG_STAGE4_RETENTION_DAYS: ${AIDIAG_STAGE4_RETENTION_DAYS:-30}
       AIDIAG_STAGE4_OPERATOR_USERNAME: ${AIDIAG_STAGE4_OPERATOR_USERNAME:-aidiag-operator}
       DEPLOYMENT_ENVIRONMENT: ${DEPLOYMENT_ENVIRONMENT}
-      OTEL_RESOURCE_ATTRIBUTES: service.version=0.1.0,deployment.environment.name=${DEPLOYMENT_ENVIRONMENT},service.namespace=dduo
+      OTEL_RESOURCE_ATTRIBUTES: service.version=1.0.0,deployment.environment.name=${DEPLOYMENT_ENVIRONMENT},service.namespace=dduo
     secrets:
       - source: aidiag_db_password
         target: aidiag.db.password
@@ -326,6 +326,7 @@ services:
     volumes:
       - ./infra/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - ./infra/prometheus/rules:/etc/prometheus/rules:ro
+      - ${AIDIAG_PROMETHEUS_TARGETS_DIR:-./.runtime/prometheus-targets}:/etc/prometheus/targets:ro
       - prometheus_data:/prometheus
     networks:
       - core

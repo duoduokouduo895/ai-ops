@@ -8,6 +8,18 @@ RUN mvn -B -ntp dependency:copy \
     -DoutputDirectory=/otel
 
 COPY src ./src
+# The monitoring contract tests intentionally validate the deployable source
+# configuration. Keep these files in the build stage only; they are not copied
+# into the runtime image.
+COPY compose.yaml ./compose.yaml
+COPY infra/prometheus/prometheus.yml ./infra/prometheus/prometheus.yml
+COPY infra/prometheus/rules/aidiag.yml ./infra/prometheus/rules/aidiag.yml
+COPY infra/alloy/config.alloy ./infra/alloy/config.alloy
+COPY infra/grafana/dashboards/ai-chat-operations.json ./infra/grafana/dashboards/ai-chat-operations.json
+COPY infra/grafana/dashboards/ai-chat-break-glass.json ./infra/grafana/dashboards/ai-chat-break-glass.json
+COPY scripts/cloud-activate-ai-chat-production-monitoring.sh ./scripts/cloud-activate-ai-chat-production-monitoring.sh
+COPY scripts/cloud-rollback-ai-chat-production-monitoring.sh ./scripts/cloud-rollback-ai-chat-production-monitoring.sh
+COPY scripts/cloud-verify-ai-chat-monitoring.sh ./scripts/cloud-verify-ai-chat-monitoring.sh
 RUN mvn -B -ntp verify
 
 FROM eclipse-temurin:21.0.11_10-jre-noble@sha256:c978ac6dd6aa90ec21935eb6c848f50ebf9b783160eefdd6accd8d2fd9ebeef1
@@ -39,4 +51,3 @@ HEALTHCHECK --interval=15s --timeout=5s --start-period=45s --retries=5 \
     CMD curl --fail --silent http://localhost:8080/actuator/health/readiness || exit 1
 
 ENTRYPOINT ["java", "-jar", "/opt/aidiag/application.jar"]
-

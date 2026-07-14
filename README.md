@@ -2,9 +2,11 @@
 
 AIDiag 是一个面向 Java 服务的证据驱动型异常诊断平台。它接收 Alertmanager 告警，聚合 Incident，并从 Prometheus、Loki、Tempo 收集固定查询范围内的指标、日志和 Trace 证据，最终生成可审计、可解释的确定性诊断报告。
 
-平台当前重点接入 **AI-chat**：通过私有遥测网络监控候选实例，不侵入 AI-chat 业务代码，也不会把 Prompt、回答、用户 ID、会话 ID 或 Secret 写入运维遥测。
+平台当前重点接入 **AI-chat**：通过私有遥测网络监控候选与按 cutover 激活的生产实例，不侵入 AI-chat 业务代码，也不会把 Prompt、回答、用户 ID、会话 ID 或 Secret 写入运维遥测。
 
-> 当前状态：Stage 0～4、Stage 5.1～5.3 已完成；Stage 5.4 的独立故障入口和只读 API 已发布，AI-chat Admin 仅作为服务存活时的辅助入口。Stage 5.5 正在收紧 Nacos、Secret、新版候选与生产切换门禁；尚未对外声明 V1 正式发布。
+> 当前状态：Stage 0～4、Stage 5.1～5.4 已完成；Stage 5.5 的 Phase A～C 和 Phase D 入口预置均已完成。V1 发布候选已通过完整业务回归，尚待 DNS 切换、外部监控、30 分钟观察和最终归档，因此暂不对外声明正式发布。
+
+> 维护状态：旧服务器 AI-chat 已停止且 `api.dduo.chat` 仍解析到旧地址 `119.29.109.190`，因此公开 API 当前不可用。GCP TLS/Nginx 已预置并通过主机外 `--resolve` 验证，但 DNS 尚未切换；未经新的明确确认不得修改 DNS。
 
 ## 核心能力
 
@@ -20,7 +22,7 @@ AIDiag 是一个面向 Java 服务的证据驱动型异常诊断平台。它接�
 
 ```mermaid
 flowchart LR
-    CHAT["AI-chat 私有候选"] -->|Metrics| PROM[Prometheus]
+    CHAT["AI-chat candidate / production"] -->|Metrics| PROM[Prometheus]
     CHAT -->|脱敏日志| ALLOY[Grafana Alloy]
     CHAT -->|OTLP Trace| ALLOY
     ALLOY --> LOKI[Loki]
@@ -65,7 +67,7 @@ AI-chat 与 AIDiag 只通过遥测协议和告警协议连接。AIDiag 故障不
 | Stage 5.2 | 已完成发布 | 四类 AI-chat 规则、Dashboard、自动建单传输验收 |
 | Stage 5.3 | 已完成 | 隔离 contract lab、四类证据闭环、恢复、DeepSeek 联动与评测归档 |
 | Stage 5.4 | 独立入口已发布 | Blackbox 外部探针、独立 Grafana 故障入口、鉴权只读 API；Admin 为辅助入口 |
-| Stage 5.5 | 进行中 | 版本兼容、Nacos 3/鉴权、Secret 轮换、新版候选、主机外监控和生产切换门禁 |
+| Stage 5.5 | 发布候选 | Phase A～C 与 Phase D 入口预置完成；GCP production、Flyway V5、双目标 7/7、登录/SSE/知识库/OSS/IK/RAG/管理端和告警恢复闭环已验收；待 DNS、外部监控、30 分钟观察与归档 |
 
 完整范围、门禁和遗留风险请阅读 [`AIDiag-V1-实施方案.md`](./AIDiag-V1-实施方案.md)。云端人工操作与回滚说明位于 [`云端实施操作手册.md`](./云端实施操作手册.md)。
 
@@ -116,7 +118,9 @@ Windows PowerShell：
 
 ## 下一步
 
-隔离 Nacos 3.2.2 与 Elasticsearch 9.3.2 + IK 9.3.2 云端候选均已通过，且没有替换现有 Nacos 2.1.1 / Elasticsearch 8.13.4。新版 AI-chat 私有候选已完成 166 项镜像内测试、Nacos 服务注册与恢复重连、ES9 业务索引和 IK Mapping、一次临时 Guest SSE、MySQL 持久化、Prometheus/Loki/Tempo 关联及精确清理；Nginx、DNS、Flyway、listener 和 scheduler 均未切换。详细证据见 [`docs/verification/2026-07-13-elasticsearch9-ik-candidate-cloud.md`](docs/verification/2026-07-13-elasticsearch9-ik-candidate-cloud.md)。下一步是历史 Secret 逐项轮换、主机外监控、生产 Nginx/TLS/维护窗口切换和最终发布归档。shadow mode 的非重叠真实样本继续收集，但不阻塞个人展示版 V1；它只阻止我们宣称生产诊断准确率。
+cutover `20260713-v1-mvp-cutover-1` 已完成 Phase B：旧 JVM 在 Spring/RabbitMQ shutdown hook 中阻塞，按用户明确确认使用 `SIGKILL` 后，PID、8080 监听和 Java 中间件连接均消失；停写证据与 V4 数据库备份已绑定 cutover 并通过 SHA-256 校验。GCP production 已升级至 `20260714-v1.0.0-rag-model-policy-r12`，Flyway V5、登录/刷新、Guest/用户 SSE、知识库上传、OSS、ES9 + IK、RAG、管理端、Prometheus/Loki/Tempo 关联和精确清理均通过；AIDiag r5 的 production 七个目标全部健康，并完成一次真实 `firing -> Incident -> 报告 -> resolved` 恢复周期。
+
+下一步不是重复 Phase B/C，也不需要再次配置 TLS/Nginx；只需将 DNS 切到 GCP、创建独立外部监控并观察至少 30 分钟，然后归档 V1 tag。当前旧实例已停而 DNS 仍指向旧地址，公开 API 处于维护不可用状态。历史 Secret 轮换和真实旧站回滚演练仍保留为发布后的安全债务；在稳定窗口后开始 V1.1 service catalog 配置驱动改造。
 
 ## License
 

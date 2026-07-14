@@ -64,6 +64,25 @@ loki.source.file "ai_chat_logs" {
 	forward_to = [loki.process.ai_chat_logs.receiver]
 }
 
+// Production writes to a separate file so candidate and production evidence
+// never acquire the wrong service_name while both files are retained.
+local.file_match "ai_chat_production_logs" {
+	path_targets = [
+		{
+			"__path__"     = "/var/log/ai-chat/production-operations.jsonl",
+			"job"          = "ai-chat",
+			"service_name" = "ai-chat-production",
+			"environment"  = "cloud-production",
+		},
+	]
+	sync_period = "10s"
+}
+
+loki.source.file "ai_chat_production_logs" {
+	targets    = local.file_match.ai_chat_production_logs.targets
+	forward_to = [loki.process.ai_chat_logs.receiver]
+}
+
 // The AI-chat release gate writes only bounded, redacted startup failures here.
 // This covers JVM failures before the application JSON logger is initialized
 // without exposing the Docker socket to Alloy or any application container.

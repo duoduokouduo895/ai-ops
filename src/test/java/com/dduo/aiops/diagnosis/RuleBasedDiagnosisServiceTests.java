@@ -87,11 +87,25 @@ class RuleBasedDiagnosisServiceTests {
                 "AiChatSearchUnavailable")) {
             var result = service.diagnose(incident("ai-chat-candidate", alertName));
             assertThat(result.verificationStatus()).isEqualTo("SUPPORTED");
-            assertThat(result.groundTruth()).isNotBlank().isNotEqualTo("UNSPECIFIED");
+            assertThat(result.groundTruth()).isEqualTo("UNSPECIFIED");
         }
         assertThat(metricQueries).hasSize(4).allMatch(query -> query.contains("ai-chat-candidate"));
         assertThat(logQueries).hasSize(4).allMatch(query -> query.contains("service_name=\"ai-chat-candidate\""));
         assertThat(traceQueries).hasSize(4).allMatch(query -> query.contains("resource.service.name = \"ai-chat-candidate\""));
+    }
+
+    @Test
+    void mirrorsTheFourContractsForProductionWithoutInterpolatingIncidentInput() {
+        for (var alertName : List.of("AiChatModelTimeout", "AiChatR2dbcPoolExhaustion", "AiChatDocumentBacklog",
+                "AiChatSearchUnavailable")) {
+            var result = service.diagnose(incident("ai-chat-production", alertName));
+            assertThat(result.verificationStatus()).isEqualTo("SUPPORTED");
+            assertThat(result.groundTruth()).isEqualTo("UNSPECIFIED");
+        }
+        assertThat(metricQueries).hasSize(4).allMatch(query -> query.contains("ai-chat-production"));
+        assertThat(logQueries).hasSize(4).allMatch(query -> query.contains("service_name=\"ai-chat-production\""));
+        assertThat(traceQueries).hasSize(4)
+                .allMatch(query -> query.contains("resource.service.name = \"ai-chat-production\""));
     }
 
     @Test

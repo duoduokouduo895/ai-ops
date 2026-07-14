@@ -11,12 +11,23 @@ base_dir="${AIDIAG_BASE_DIR:-/opt/aidiag}"
 runtime_dir="${base_dir}/runtime"
 current_link="${base_dir}/current"
 next_link="${base_dir}/.current.next"
+prometheus_targets_dir="${runtime_dir}/prometheus-targets"
 
 [[ "${release}" == "${base_dir}/releases/"* ]] || { echo "Release must be below ${base_dir}/releases" >&2; exit 65; }
 [[ -f "${release}/compose.yaml" && -f "${release}/versions.env" ]] || { echo "Release is incomplete" >&2; exit 66; }
 [[ -f "${runtime_dir}/.env.cloud" && -d "${runtime_dir}/.secrets" ]] || { echo "Runtime config is missing" >&2; exit 67; }
 
 export AIDIAG_SECRETS_DIR="${runtime_dir}/.secrets"
+export AIDIAG_PROMETHEUS_TARGETS_DIR="${prometheus_targets_dir}"
+
+if [[ -e "${prometheus_targets_dir}" ]]; then
+  [[ -d "${prometheus_targets_dir}" && ! -L "${prometheus_targets_dir}" \
+    && "$(stat -c '%u:%g' "${prometheus_targets_dir}")" == '0:0' \
+    && "$(stat -c '%a' "${prometheus_targets_dir}")" == '755' ]] \
+    || { echo "Prometheus runtime target directory is unsafe" >&2; exit 68; }
+else
+  install -d -o 0 -g 0 -m 0755 "${prometheus_targets_dir}"
+fi
 
 set_compose_files() {
   local target_release="$1"

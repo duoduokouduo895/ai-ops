@@ -10,7 +10,7 @@
       "gridPos": {"h": 7, "w": 16, "x": 0, "y": 0},
       "id": 1,
       "options": {"colorMode": "background", "graphMode": "none", "justifyMode": "auto", "orientation": "horizontal", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "showPercentChange": false, "textMode": "name", "wideLayout": true},
-      "targets": [{"editorMode": "code", "expr": "probe_success{job=\"blackbox-ai-chat\"}", "instant": true, "legendFormat": "{{component}}", "range": false, "refId": "A"}],
+      "targets": [{"editorMode": "code", "expr": "probe_success{job=\"blackbox-ai-chat\",service_name=~\"${service_name:regex}\"}", "instant": true, "legendFormat": "{{service_name}} / {{component}}", "range": false, "refId": "A"}],
       "title": "独立可达性探针",
       "type": "stat"
     },
@@ -20,7 +20,7 @@
       "gridPos": {"h": 7, "w": 8, "x": 16, "y": 0},
       "id": 2,
       "options": {"legend": {"calcs": ["lastNotNull", "max"], "displayMode": "list", "placement": "bottom", "showLegend": true}, "tooltip": {"mode": "multi", "sort": "desc"}},
-      "targets": [{"editorMode": "code", "expr": "probe_duration_seconds{job=\"blackbox-ai-chat\"}", "legendFormat": "{{component}}", "range": true, "refId": "A"}],
+      "targets": [{"editorMode": "code", "expr": "probe_duration_seconds{job=\"blackbox-ai-chat\",service_name=~\"${service_name:regex}\"}", "legendFormat": "{{service_name}} / {{component}}", "range": true, "refId": "A"}],
       "title": "探针耗时",
       "type": "timeseries"
     },
@@ -30,7 +30,7 @@
       "gridPos": {"h": 8, "w": 12, "x": 0, "y": 7},
       "id": 3,
       "options": {"cellHeight": "sm", "showHeader": true},
-      "targets": [{"editorMode": "code", "expr": "ALERTS{alertname=~\"AiChatProcessUnavailable|AiChatDependencyUnreachable\",alertstate=\"firing\"}", "format": "table", "instant": true, "legendFormat": "__auto", "range": false, "refId": "A"}],
+      "targets": [{"editorMode": "code", "expr": "ALERTS{alertname=~\"AiChatProcessUnavailable|AiChatDependencyUnreachable\",alertstate=\"firing\",service_name=~\"${service_name:regex}\"}", "format": "table", "instant": true, "legendFormat": "__auto", "range": false, "refId": "A"}],
       "title": "当前外部告警",
       "type": "table"
     },
@@ -39,7 +39,7 @@
       "gridPos": {"h": 8, "w": 12, "x": 12, "y": 7},
       "id": 4,
       "options": {"dedupStrategy": "none", "enableInfiniteScrolling": false, "enableLogDetails": true, "prettifyLogMessage": false, "showCommonLabels": false, "showLabels": false, "showTime": true, "sortOrder": "Descending", "wrapLogMessage": true},
-      "targets": [{"editorMode": "code", "expr": "{service_name=~\"ai-chat-candidate|ai-chat-startup\"} |~ \"(?i)error|warn|exception|failed|startup_failure\"", "queryType": "range", "refId": "A"}],
+      "targets": [{"editorMode": "code", "expr": "{service_name=~\"${service_name:regex}|ai-chat-startup\"} |~ \"(?i)error|warn|exception|failed|startup_failure\"", "queryType": "range", "refId": "A"}],
       "title": "最近启动与运行错误",
       "type": "logs"
     },
@@ -55,11 +55,11 @@
   "refresh": "15s",
   "schemaVersion": 42,
   "tags": ["aidiag", "ai-chat", "break-glass"],
-  "templating": {"list": []},
+  "templating": {"list": [{"allValue": "ai-chat-(candidate|production)", "current": {"selected": true, "text": "All", "value": "$__all"}, "hide": 0, "includeAll": true, "label": "Service", "multi": false, "name": "service_name", "options": [{"selected": true, "text": "All", "value": "$__all"}, {"selected": false, "text": "ai-chat-candidate", "value": "ai-chat-candidate"}, {"selected": false, "text": "ai-chat-production", "value": "ai-chat-production"}], "query": "ai-chat-candidate,ai-chat-production", "type": "custom"}]},
   "time": {"from": "now-1h", "to": "now"},
   "timepicker": {},
   "timezone": "browser",
   "title": "AI-chat 独立故障入口",
   "uid": "ai-chat-break-glass",
-  "version": 1
+  "version": 2
 }

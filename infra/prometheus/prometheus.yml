@@ -31,6 +31,22 @@ scrape_configs:
         labels:
           service_name: ai-chat-candidate
 
+  # Production targets are intentionally absent from Git. The reviewed
+  # activation script writes the file_sd document immediately before the
+  # production process starts, so an unstarted service cannot create false
+  # incidents during Phase B.
+  - job_name: ai-chat-production
+    metrics_path: /actuator/prometheus
+    file_sd_configs:
+      - files: [/etc/prometheus/targets/ai-chat-production.json]
+        refresh_interval: 5s
+    relabel_configs:
+      - source_labels: [scrape_kind]
+        regex: metrics
+        action: keep
+      - regex: scrape_kind
+        action: labeldrop
+
   # Runs outside the AI-chat JVM, so it remains useful when the application
   # cannot start. The component label is fixed here and never user-controlled.
   - job_name: blackbox-ai-chat
@@ -44,11 +60,19 @@ scrape_configs:
         labels: {module: tcp_connect, component: redis, target_kind: dependency, service_name: ai-chat-candidate}
       - targets: [rabbitmq:5672]
         labels: {module: tcp_connect, component: rabbitmq, target_kind: dependency, service_name: ai-chat-candidate}
-      - targets: [elasticsearch:9200]
+      - targets: [elasticsearch-v9-candidate:9200]
         labels: {module: tcp_connect, component: elasticsearch, target_kind: dependency, service_name: ai-chat-candidate}
-      - targets: [nacos:8848]
+      - targets: [nacos-v3-candidate:8848]
         labels: {module: tcp_connect, component: nacos, target_kind: dependency, service_name: ai-chat-candidate}
+    file_sd_configs:
+      - files: [/etc/prometheus/targets/ai-chat-production.json]
+        refresh_interval: 5s
     relabel_configs:
+      - source_labels: [scrape_kind]
+        # Static candidate targets have no scrape_kind; production file_sd
+        # targets must explicitly identify themselves as probes.
+        regex: probe|
+        action: keep
       - source_labels: [__address__]
         target_label: __param_target
       - source_labels: [__param_target]
@@ -57,6 +81,8 @@ scrape_configs:
         target_label: __param_module
       - target_label: __address__
         replacement: blackbox-exporter:9115
+      - regex: scrape_kind
+        action: labeldrop
 
   - job_name: ai-chat-stage5-lab
     metrics_path: /actuator/prometheus

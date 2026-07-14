@@ -1,7 +1,7 @@
 # AIDiag V1 实施方案
 
-> 文档版本：V1.7（V1 发布兼容性与安全门禁收紧）
-> 更新日期：2026-07-13
+> 文档版本：V1.9（Phase B/C 云端执行与发布边界）
+> 更新日期：2026-07-14
 > 定位：面向 Java 微服务的只读智能诊断层。第一批真实接入目标为 AI-chat，并以受控 Fault Lab 完成故障评测。
 
 ---
@@ -718,12 +718,14 @@ Smoke 功能使用 `POST /internal/smoke/telemetry`，且只在 `AIDIAG_SMOKE_EN
 - [x] [Nacos 应用验收] AI-chat 使用 mode-specific `spring.application.name` 注册为 `ai-chat-candidate`，恰有 1 个健康实例；受控停止隔离 Nacos 时应用依靠本地配置缓存保持健康且零重启，Nacos 恢复后自动重新注册；客户端 Secret 未进入日志。现有 Nacos 2.1.1 未停止或替换；
 - [x] [Elasticsearch 兼容门禁] 创建独立 Elasticsearch 9.3.2 + IK 9.3.2 候选，锁定官方 amd64 镜像 digest 与 IK ZIP SHA-256；候选使用独立 config/data volumes、鉴权与索引级最小权限，端口仅绑定 loopback/私网。IK 中文 Mapping/检索、业务索引、dense_vector KNN 与权限负向测试全部通过，现有 Elasticsearch 8.13.4 保持运行且零重启；
 - [x] [候选门禁] AI-chat release `20260713-v1-nacos3-es9-ik-candidate-r4` 通过 166 项镜像内测试、健康/资源/只读根文件系统、Nacos 注册、真实 Guest SSE、MySQL 持久化、ES9 写入/删除、IK Mapping、Prometheus/Loki/Tempo 关联和精确清理门禁；Nginx/DNS 与生产写任务保持不变；
-- [ ] [可观测门禁] 启动早期日志已通过受控文件采集到 Loki；仍需完成主机外 HTTPS/主机可用性检查。Grafana 继续保持 loopback 或经 TLS/鉴权反向代理访问；
+- [x] [双目标监控本地实现] candidate metrics/Blackbox 常驻并改用 `nacos-v3-candidate`、`elasticsearch-v9-candidate` 真实别名；production metrics/应用/五依赖使用 root-owned Prometheus `file_sd` 按 cutover 激活，Alloy、告警、固定诊断规则和 Grafana service selector 同时支持 `ai-chat-production`；激活失败自动撤回新 target，回滚只归档受管文件且拒绝在 production 运行时移除监控；
+- [x] [双目标监控云端门禁] Phase B 已按 cutover `20260713-v1-mvp-cutover-1` 完成备份、旧 writer 停写、批准、candidate 停止与 production target 激活；Phase C 的 production 7/7、Loki production 日志、Tempo Trace、真实告警、自动建单、确定性报告和恢复周期均通过。candidate 目标定义继续保留，计划停写时不会产生 application 假告警；
+- [ ] [可观测门禁] 启动早期日志与 production 脱敏日志已通过受控文件采集到 Loki，production Trace 已在 Tempo 关联；仍需完成主机外 HTTPS/主机可用性检查。Grafana 继续保持 loopback 或经 TLS/鉴权反向代理访问；
 - [ ] [Secret 门禁] 轮换曾经进入聊天记录或 Git 历史的 DeepSeek、Nacos、JWT、数据库、中间件和 OSS 凭据，并逐项验证旧实例回滚策略；
-- [ ] [生产切换] 在维护窗口停止旧实例写任务，执行生产 Flyway/启动/业务验收，预置 Nginx/TLS 后再切换 DNS；失败时按记录恢复旧 upstream/A 记录；
+- [ ] [生产切换] Phase B 已完成：旧实例已停止，PID、8080 和 Java 中间件连接均消失，停写证据与数据库备份已校验；Phase C 已完成 Flyway V5、production 启动、Guest SSE、持久化、Nacos/ES9 + IK、遥测和告警恢复闭环；GCP TLS/Nginx 已预置，本机与主机外 `--resolve` 均通过。仍需补做用户登录、知识库上传、OSS/RAG 与管理端生产回归，并经新的明确确认执行 Phase D DNS 切换；失败时按记录恢复旧实例/upstream/A 记录；
 - [ ] [发布归档] 归档 SBOM、镜像 digest、测试/Compose/健康/业务/遥测证据、已知限制和回滚演练结果，创建 V1 tag 后才对外声明第一版发布。
 
-截至 2026-07-13，V1 的业务闭环、Nacos 3.2.2 应用级候选、Elasticsearch 9.3.2 + IK 候选和新版 AI-chat 私有候选均已通过。当前剩余发布阻塞是历史 Secret 逐项轮换、主机外监控、生产 Nginx/TLS/维护窗口切换、最终回滚演练与发布归档；在这些门禁完成前可以展示私有候选和 Grafana，但不能把新版 AI-chat 标记为正式生产发布。详细证据见 [`docs/verification/2026-07-13-elasticsearch9-ik-candidate-cloud.md`](docs/verification/2026-07-13-elasticsearch9-ik-candidate-cloud.md)。
+截至 2026-07-14，V1 的业务闭环、Nacos 3.2.2、Elasticsearch 9.3.2 + IK、AI-chat production 核心链路和 AIDiag 双目标监控均已通过。当前剩余发布阻塞是 Phase C 完整业务回归、Phase D、历史 Secret 逐项轮换、主机外监控、最终回滚演练与发布归档。旧 AI-chat 已停止而 DNS 仍指向旧地址，因此公开 API 当前处于维护不可用状态；在入口切换和外部验收完成前不能把新版 AI-chat 或 AIDiag V1 标记为正式生产发布。云端执行证据见 [`docs/verification/2026-07-14-v1-phase-b-c-cloud.md`](docs/verification/2026-07-14-v1-phase-b-c-cloud.md)。
 
 总验收：AI-chat 的真实告警可生成引用其真实遥测证据的确定性诊断报告；数据采集不包含 Prompt、回答、用户/会话标识或 Secret；模型失败不影响规则报告；AIDiag 故障不阻断 AI-chat 主业务；部署和回滚均不要求手工上传 Jar。
 
@@ -744,13 +746,22 @@ Smoke 功能使用 `POST /internal/smoke/telemetry`，且只在 `AIDIAG_SMOKE_EN
 - [x] 完成 AI-chat 独立 Docker 构建、私有 telemetry 网络和回滚基线；
 - [x] 完成 AI-chat 遥测隐私审查后再允许 Loki/Tempo 采集；
 - [x] 完成四类 AI-chat 规则、隔离故障验收和 Stage 5.4 独立故障入口；Admin 运维页只作为辅助入口，不与 AI-chat 共用救援职责。
-- [ ] 完成 Stage 5.5 剩余的 Secret 轮换、主机外监控、生产切换与发布归档门禁后发布 V1；Elasticsearch 9 + IK、Nacos 应用验收和新版私有候选已完成，生产步骤已固化到 [`docs/release/V1-production-cutover-runbook.md`](docs/release/V1-production-cutover-runbook.md)。
+- [ ] 完成 Stage 5.5 剩余的生产完整业务回归、Phase D、Secret 轮换、主机外监控、回滚演练与发布归档门禁后发布 V1；Phase B 和 Phase C 核心链路已经执行，后续步骤固化在 [`docs/release/V1-production-cutover-runbook.md`](docs/release/V1-production-cutover-runbook.md)。
 
 ---
 
 ## 14. 后续升级边界
 
 只有在 V1 指标证明存在具体瓶颈或能力缺口时，才考虑 Kafka 事件化、Kubernetes 只读诊断、多 Agent、变更平台接入、知识图谱、人工审批的半自动修复、多租户和 RBAC。每次升级必须说明解决的具体问题、迁移策略和可验证收益。
+
+### 14.1 V1.1 配置驱动接入
+
+V1 发布并完成回滚演练后，下一条版本线把当前 AI-chat 的固定接入抽成受版本控制的 service catalog。V1.1
+只配置服务身份、环境、metrics endpoint、脱敏日志路径、OTel service name、固定依赖探针和允许启用的诊断 profile；
+不允许用户直接提交任意 PromQL、LogQL、TraceQL 或 Shell。catalog 必须有 schema 校验、dry-run、渲染后配置检查、
+canary reload、失败回滚和重复 service/alert 拒绝门禁。JVM/HTTP/R2DBC/RabbitMQ/Redis/Elasticsearch/Nacos 等通用
+profile 复用固定查询模板，只有项目特有业务语义才新增代码 Adapter。第二个真实项目接入前完成该改造，用两个 Adapter
+证明 seam 是真实需求；V1 发布前不进行动态规则后台、数据库配置中心或第三套前端重构。
 
 ---
 

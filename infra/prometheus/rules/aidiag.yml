@@ -69,49 +69,52 @@ groups:
           summary: Fault Lab controlled database slow query is active
           description: The controlled Payment database slow-query fault is active; trigger an Order request to collect its log and trace evidence.
 
-  - name: ai-chat-candidate
+  - name: ai-chat-runtime
     rules:
-      # These alerts use bounded-cardinality metrics emitted by the private Stage 5
-      # candidate. They do not contain user, conversation, prompt or URL labels.
+      # Candidate and production implement the same bounded-cardinality telemetry
+      # contract. service_name is preserved from each input series so incidents
+      # remain isolated even though they share an alert name.
       - alert: AiChatModelTimeout
-        expr: increase(aichat_chat_requests_total{service_name="ai-chat-candidate",outcome="timeout"}[5m]) >= 1
+        expr: |
+          sum by (service_name) (
+            increase(aichat_chat_requests_total{service_name=~"ai-chat-(candidate|production)",outcome="timeout"}[5m])
+          ) >= 1
         for: 30s
         labels:
           severity: warning
-          service_name: ai-chat-candidate
         annotations:
           summary: AI-chat model stream timed out
-          description: At least one candidate chat stream ended with the bounded timeout outcome in five minutes.
+          description: At least one chat stream ended with the bounded timeout outcome in five minutes.
 
       - alert: AiChatR2dbcPoolExhaustion
-        expr: max_over_time(aichat_r2dbc_pool_pending{service_name="ai-chat-candidate"}[5m]) >= 1
+        expr: max_over_time(aichat_r2dbc_pool_pending{service_name=~"ai-chat-(candidate|production)"}[5m]) >= 1
         for: 1m
         labels:
           severity: warning
-          service_name: ai-chat-candidate
         annotations:
           summary: AI-chat R2DBC acquisition is pending
-          description: Candidate database connection acquisition has remained queued; correlate with the fixed timeout event before confirming exhaustion.
+          description: Database connection acquisition has remained queued; correlate with the fixed timeout event before confirming exhaustion.
 
       - alert: AiChatDocumentBacklog
-        expr: max_over_time(aichat_document_outbox_pending{service_name="ai-chat-candidate"}[10m]) >= 10
+        expr: max_over_time(aichat_document_outbox_pending{service_name=~"ai-chat-(candidate|production)"}[10m]) >= 10
         for: 2m
         labels:
           severity: warning
-          service_name: ai-chat-candidate
         annotations:
           summary: AI-chat document outbox backlog is elevated
           description: At least ten unpublished document outbox events remain pending; correlate with retry events before confirming the pipeline root cause.
 
       - alert: AiChatSearchUnavailable
-        expr: increase(aichat_search_requests_total{service_name="ai-chat-candidate",outcome="error"}[5m]) >= 3
+        expr: |
+          sum by (service_name) (
+            increase(aichat_search_requests_total{service_name=~"ai-chat-(candidate|production)",outcome="error"}[5m])
+          ) >= 3
         for: 1m
         labels:
           severity: warning
-          service_name: ai-chat-candidate
         annotations:
           summary: AI-chat knowledge search is repeatedly failing
-          description: At least three candidate search operations failed in five minutes; correlate with the fixed Elasticsearch operation event.
+          description: At least three search operations failed in five minutes; correlate with the fixed Elasticsearch operation event.
 
   # Stage 5.3 lifecycle is driven only by authenticated state in the isolated
   # contract lab. Diagnosis still evaluates production-compatible telemetry.
@@ -152,22 +155,27 @@ groups:
   - name: ai-chat-external-availability
     rules:
       - alert: AiChatProcessUnavailable
-        expr: probe_success{job="blackbox-ai-chat",target_kind="application"} == 0
+        expr: |
+          probe_success{job="blackbox-ai-chat",target_kind="application",service_name!="ai-chat-candidate"} == 0
+          or
+          (
+            probe_success{job="blackbox-ai-chat",target_kind="application",service_name="ai-chat-candidate"} == 0
+            unless on()
+            count(up{job="ai-chat-production"})
+          )
         for: 2m
         labels:
           severity: critical
-          service_name: ai-chat-candidate
           evidence_source: external_probe
         annotations:
           summary: AI-chat is unreachable from the independent monitoring plane
-          description: The external health probe has failed for two minutes. Check dependency probes and startup logs before assigning a root cause.
+          description: The external health probe has failed for two minutes. Candidate alerts are suppressed after production monitoring is activated because the cutover intentionally stops the candidate. Check dependency probes and startup logs before assigning a root cause.
 
       - alert: AiChatDependencyUnreachable
         expr: probe_success{job="blackbox-ai-chat",target_kind="dependency"} == 0
         for: 2m
         labels:
           severity: critical
-          service_name: ai-chat-candidate
           evidence_source: external_probe
         annotations:
           summary: "AI-chat dependency {{ $labels.component }} is unreachable"

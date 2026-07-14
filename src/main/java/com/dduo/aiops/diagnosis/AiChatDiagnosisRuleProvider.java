@@ -10,7 +10,8 @@ public class AiChatDiagnosisRuleProvider implements DiagnosisRuleProvider {
 
     @Override
     public List<DiagnosisRule> rules() {
-        return Stream.of(rulesFor("ai-chat-candidate"), rulesFor("ai-chat-stage5-lab"))
+        return Stream.of(rulesFor("ai-chat-candidate"), rulesFor("ai-chat-production"),
+                        rulesFor("ai-chat-stage5-lab"))
                 .flatMap(List::stream).toList();
     }
 
@@ -22,7 +23,8 @@ public class AiChatDiagnosisRuleProvider implements DiagnosisRuleProvider {
                         "{service_name=\"" + service + "\",event=\"ai_chat_stream_finished\",result=\"timeout\"}",
                         "ai_chat_stream_finished:timeout",
                         "{ resource.service.name = \"" + service + "\" && duration > 10s }", "MODEL_PROVIDER_TIMEOUT",
-                        "MODEL_PROVIDER_FIXED_DELAY_OR_TIMEOUT", "模型流在受控超时边界内未返回，聊天流以 timeout 结束。",
+                        evaluationGroundTruth(service, "MODEL_PROVIDER_FIXED_DELAY_OR_TIMEOUT"),
+                        "模型流在受控超时边界内未返回，聊天流以 timeout 结束。",
                         "Verify provider reachability and timeout budget; do not replay user prompts automatically"),
                 rule(service, "AiChatR2dbcPoolExhaustion",
                         "max_over_time(aichat_r2dbc_pool_pending{service_name=\"" + service + "\"}[5m])", 1,
@@ -30,7 +32,8 @@ public class AiChatDiagnosisRuleProvider implements DiagnosisRuleProvider {
                         "{service_name=\"" + service + "\",event=\"r2dbc_pool_acquire\",result=\"timeout\"}",
                         "r2dbc_pool_acquire:timeout",
                         "{ resource.service.name = \"" + service + "\" && span.db.system = \"mysql\" && status = error }",
-                        "R2DBC_POOL_EXHAUSTION", "R2DBC_POOL_CAPACITY_HELD_BY_CONTROLLED_LOAD",
+                        "R2DBC_POOL_EXHAUSTION",
+                        evaluationGroundTruth(service, "R2DBC_POOL_CAPACITY_HELD_BY_CONTROLLED_LOAD"),
                         "R2DBC 获取请求发生排队，并出现受控连接获取超时事件。",
                         "Stop the isolated load and verify pending acquisitions return to zero"),
                 rule(service, "AiChatDocumentBacklog",
@@ -39,7 +42,8 @@ public class AiChatDiagnosisRuleProvider implements DiagnosisRuleProvider {
                         "{service_name=\"" + service + "\",event=\"document_outbox_dispatch\",result=\"retry\"}",
                         "document_outbox_dispatch:retry",
                         "{ resource.service.name = \"" + service + "\" && span.messaging.system = \"rabbitmq\" && status = error }",
-                        "DOCUMENT_PIPELINE_BACKLOG", "ISOLATED_DOCUMENT_CONSUMER_PAUSED_OR_RATE_LIMITED",
+                        "DOCUMENT_PIPELINE_BACKLOG",
+                        evaluationGroundTruth(service, "ISOLATED_DOCUMENT_CONSUMER_PAUSED_OR_RATE_LIMITED"),
                         "文档 outbox 待投递数量持续超过阈值，并出现投递重试事件。",
                         "Restore the isolated consumer or broker path and verify backlog drains before retrying documents"),
                 rule(service, "AiChatSearchUnavailable",
@@ -48,7 +52,8 @@ public class AiChatDiagnosisRuleProvider implements DiagnosisRuleProvider {
                         "{service_name=\"" + service + "\",event=\"knowledge_search\",result=\"error\"}",
                         "knowledge_search:error",
                         "{ resource.service.name = \"" + service + "\" && span.db.system = \"elasticsearch\" && status = error }",
-                        "SEARCH_BACKEND_UNAVAILABLE", "ISOLATED_ELASTICSEARCH_PATH_BLOCKED",
+                        "SEARCH_BACKEND_UNAVAILABLE",
+                        evaluationGroundTruth(service, "ISOLATED_ELASTICSEARCH_PATH_BLOCKED"),
                         "知识检索连续失败，并出现受控 Elasticsearch 不可用事件。",
                         "Restore Elasticsearch reachability and verify a privacy-safe search probe succeeds"));
     }
@@ -58,5 +63,9 @@ public class AiChatDiagnosisRuleProvider implements DiagnosisRuleProvider {
             String groundTruth, String description, String action) {
         return new DiagnosisRule(service, alertName, metricQuery, threshold, metricDescription, logQuery, logMarker,
                 traceQuery, candidate, groundTruth, description, "[{\"action\":\"" + action + "\"}]");
+    }
+
+    private static String evaluationGroundTruth(String service, String controlledGroundTruth) {
+        return "ai-chat-stage5-lab".equals(service) ? controlledGroundTruth : "UNSPECIFIED";
     }
 }

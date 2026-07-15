@@ -1,0 +1,31 @@
+version: 1
+services:
+  - id: ai-chat
+    displayName: AI-chat
+    environment: production
+    healthUrl: http://ai-chat-production:8080/actuator/health
+    metricsUrl: http://ai-chat-production:8080/actuator/prometheus
+    otelServiceName: ai-chat-production
+    diagnosisProfile: ai-chat-v1
+    grafanaUrl: http://127.0.0.1:13000/d/aichat-stage5-ops/ai-chat-operations
+    dependencies:
+      - { id: mysql, kind: tcp, target: "mysql:3306" }
+      - { id: redis, kind: tcp, target: "redis:6379" }
+      - { id: rabbitmq, kind: tcp, target: "rabbitmq:5672" }
+      - { id: elasticsearch, kind: tcp, target: "elasticsearch-v9-candidate:9200" }
+      - { id: nacos, kind: tcp, target: "nacos-v3-candidate:8848" }
+      - { id: public-api, kind: http, target: "https://api.dduo.me/actuator/health", signalComponent: public_ingress }
+  - id: aidiag
+    displayName: AIDiag
+    environment: production
+    healthUrl: http://aidiag-backend:8080/actuator/health
+    metricsUrl: http://aidiag-backend:8080/actuator/prometheus
+    otelServiceName: aidiag
+    diagnosisProfile: aidiag-v1
+    grafanaUrl: http://127.0.0.1:13000/d/aidiag-overview/aidiag-overview
+    dependencies:
+      - { id: postgres, kind: tcp, target: "postgres:5432" }
+      - { id: prometheus, kind: http, target: "http://prometheus:9090/-/healthy" }
+      - { id: loki, kind: http, target: "http://loki:3100/ready" }
+      - { id: tempo, kind: http, target: "http://tempo:3200/ready" }
+      - { id: alertmanager, kind: http, target: "http://alertmanager:9093/-/healthy" }

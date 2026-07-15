@@ -8,6 +8,16 @@ AIDiag 是一个面向 Java 服务的证据驱动型异常诊断平台。它接�
 
 > 当前主域名：Cloudflare Pages 前端使用 `app.dduo.me`，GCP API 使用 `api.dduo.me`。`dduo.chat` 是历史发布域名，只保留迁移参考，不再作为新配置基线。
 
+## V1.1 Incident Casefile Console（本地实现，尚未发布）
+
+- `frontend-console/`：Vue 3 + Vite + TypeScript 的独立只读运维控制台；
+- `/api/v1/console/**`：持久化 Session、精确 Origin/CORS、Session 绑定 CSRF 与脱敏投影 API；
+- `service-catalog/catalog.yml`：Git 版本化服务目录，候选校验失败时保留 last-known-good；
+- `compose.console.yaml`：显式生产激活层，基础 V1 默认不受新增 Secret 影响；
+- [`V1.1-console-release-runbook.md`](docs/release/V1.1-console-release-runbook.md)：需要确认后在 GCP 执行的 TLS、Secret、发布与回滚步骤。
+
+本地前端使用 `npm ci && npm run dev` 启动；生产构建使用 `npm run build`，会同时检查初始 JS/CSS gzip 体积门禁。
+
 ## 核心能力
 
 - **告警接入与幂等处理**：Alertmanager Webhook 使用 Basic Auth、请求体限制和数据库唯一约束，重复告警不会重复创建任务。
@@ -134,7 +144,11 @@ cutover `20260713-v1-mvp-cutover-1` 已完成 Phase B：旧 JVM 在 Spring/Rabbi
 
 V1 已正式发布。2026-07-14 的后续代码审计又收紧了 Webhook 有界读取、告警状态一致性、最终失败状态、Stage 3 查询间续租、告警持久化脱敏、模型输出防泄漏和公网 ingress 探针；这些源码变更在再次发布 GCP 前仍需执行云端 PostgreSQL/Prometheus/Linux lifecycle 门禁。
 
-下一条功能版本线是 V1.1 service catalog 配置驱动接入，使新增项目主要通过配置而不是复制 AI-chat 专用代码。发布后 P1 还包括 TLS 自动续期、模型 Key 轮换、数据留存策略、Alertmanager 重启状态对账和真实旧站恢复演练；这些事项不阻断个人展示版 V1，但在完成前不能宣称企业级高可用。
+V1.1 已在本地实现 Session API、只读 Console API、配置驱动 Service Catalog、AIDiag 自监控、
+Alertmanager 重启对账代码与独立 `frontend-console`。生产环境仍保持 V1：V9/V10 数据库迁移、TLS 自动续期验证、
+Secret 轮换、磁盘留存门禁、旧 release 恢复演练、Fault Lab 重放和 Pages/Nginx 发布均需按照
+[`docs/release/V1.1-console-release-runbook.md`](docs/release/V1.1-console-release-runbook.md) 单独确认后执行。
+在这些生产门禁完成前，只能称为“V1.1 发布候选”，不能宣称已经上线或具备企业级高可用。
 
 ## License
 

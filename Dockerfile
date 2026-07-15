@@ -11,6 +11,10 @@ COPY src ./src
 # The monitoring contract tests intentionally validate the deployable source
 # configuration. Keep these files in the build stage only; they are not copied
 # into the runtime image.
+COPY versions.env ./versions.env
+COPY fault-lab/pom.xml ./fault-lab/pom.xml
+COPY Dockerfile ./Dockerfile
+COPY fault-lab/Dockerfile ./fault-lab/Dockerfile
 COPY compose.yaml ./compose.yaml
 COPY infra/prometheus/prometheus.yml ./infra/prometheus/prometheus.yml
 COPY infra/prometheus/rules/aidiag.yml ./infra/prometheus/rules/aidiag.yml

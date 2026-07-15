@@ -1,0 +1,43 @@
+import axios from 'axios'
+import type { AiAttempt, CatalogView, Evidence, IncidentDetail, IncidentPage, Overview, ReportView, SessionView, TimelineEntry } from './types'
+
+const baseURL = import.meta.env.VITE_AIDIAG_API_BASE_URL || '/api/v1/console'
+let csrfToken = ''
+
+export const api = axios.create({ baseURL, withCredentials: true, timeout: 12_000 })
+
+api.interceptors.request.use((config) => {
+  config.headers['X-Request-Id'] = crypto.randomUUID()
+  if (csrfToken && ['post', 'put', 'patch', 'delete'].includes((config.method || '').toLowerCase())) {
+    config.headers['X-AIDiag-CSRF'] = csrfToken
+  }
+  return config
+})
+
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error?.response?.status === 401) {
+      clearCsrf()
+      window.dispatchEvent(new CustomEvent('aidiag:session-expired'))
+    }
+    return Promise.reject(error)
+  },
+)
+
+export function bindCsrf(value: string) { csrfToken = value }
+export function clearCsrf() { csrfToken = '' }
+
+export const consoleApi = {
+  login: (username: string, password: string) => api.post<SessionView>('/session', { username, password }),
+  session: () => api.get<SessionView>('/session'),
+  logout: () => api.delete('/session'),
+  overview: () => api.get<Overview>('/overview'),
+  services: () => api.get<CatalogView>('/services'),
+  incidents: (params: Record<string, string | number | undefined>) => api.get<IncidentPage>('/incidents', { params }),
+  incident: (id: string) => api.get<IncidentDetail>(`/incidents/${id}`),
+  report: (id: string) => api.get<ReportView>(`/incidents/${id}/report`),
+  evidence: (id: string) => api.get<Evidence[]>(`/incidents/${id}/evidence`),
+  timeline: (id: string) => api.get<TimelineEntry[]>(`/incidents/${id}/timeline`),
+  aiAttempts: (id: string) => api.get<AiAttempt[]>(`/incidents/${id}/ai-attempts`),
+}

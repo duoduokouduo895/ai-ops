@@ -9,6 +9,8 @@ Create these files only on the cloud server before the first deployment:
 - aidiag_deepseek_api_key
 - aidiag_stage4_operator_secret
 - aidiag_read_api_secret
+- aidiag_console_password_hash
+- aidiag_console_audit_pepper
 - faultlab_db_password
 - faultlab_control_token
 - aichat_stage5_fault_token
@@ -34,3 +36,10 @@ reuse the Stage 1 Fault Lab token or any AI-chat application credential.
 Stage 5.4 uses `aidiag_read_api_secret` only for server-to-server read requests from
 the AI-chat ADMIN BFF. Mount it into both containers as a read-only file with owner
 `root`, group `10001`, mode `640`. Do not expose it to either frontend build.
+
+V1.1 browser sessions use two separate backend-only files. `aidiag_console_password_hash`
+contains a BCrypt hash (cost 12 recommended), never the plaintext administrator password.
+`aidiag_console_audit_pepper` contains at least 32 random bytes and is used to HMAC bounded
+login-source metadata and derive the per-session CSRF token. Both files use owner `root`,
+group `10001`, mode `640`; neither value belongs in Pages variables, browser storage, logs,
+`.env.cloud`, or Git.

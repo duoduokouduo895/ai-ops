@@ -1,0 +1,249 @@
+package com.dduo.aiops.console.api;
+
+import java.nio.charset.StandardCharsets;
+import java.sql.Timestamp;
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.Base64;
+import java.util.List;
+import java.util.Locale;
+import java.util.UUID;
+
+import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
+import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
+import org.springframework.stereotype.Service;
+
+/** Browser-safe projections. Raw payloads, query specs, prompts and model responses never cross this boundary. */
+@Service
+public class ConsoleIncidentQueryService {
+
+    private final NamedParameterJdbcTemplate jdbcTemplate;
+
+    public ConsoleIncidentQueryService(NamedParameterJdbcTemplate jdbcTemplate) {
+        this.jdbcTemplate = jdbcTemplate;
+    }
+
+    public IncidentPage incidents(String cursor, int limit, String service, String status, String severity,
+            String search) {
+        var where = new StringBuilder(" WHERE 1=1");
+        var parameters = new MapSqlParameterSource("limit", limit + 1);
+        if (service != null) {
+            where.append(" AND i.primary_service = :service");
+            parameters.addValue("service", service);
+        }
+        if (status != null) {
+            where.append(" AND i.status = :status");
+            parameters.addValue("status", status);
+        }
+        if (severity != null) {
+            where.append(" AND i.severity = :severity");
+            parameters.addValue("severity", severity);
+        }
+        if (search != null && !search.isBlank()) {
+            where.append(" AND (i.title ILIKE :search OR i.alert_name ILIKE :search)");
+            parameters.addValue("search", "%" + escapeLike(search.trim()) + "%");
+        }
+        var decoded = decodeCursor(cursor);
+        if (decoded != null) {
+            where.append(" AND (i.last_alert_at, i.id) < (:cursorTime, :cursorId)");
+            parameters.addValue("cursorTime", Timestamp.from(decoded.lastAlertAt()));
+            parameters.addValue("cursorId", decoded.id());
+        }
+        var rows = jdbcTemplate.query("""
+                SELECT i.id, i.title, i.primary_service, i.alert_name, i.severity, i.status,
+                       i.started_at, i.last_alert_at, i.resolved_at,
+                       EXISTS (SELECT 1 FROM diagnosis_report r WHERE r.incident_id = i.id) AS has_report,
+                       (SELECT count(*) FROM evidence e WHERE e.incident_id = i.id) AS evidence_count
+                FROM incident i
+                """ + where + " ORDER BY i.last_alert_at DESC, i.id DESC LIMIT :limit", parameters,
+                (resultSet, rowNumber) -> new IncidentSummary(resultSet.getObject("id", UUID.class),
+                        bounded(resultSet.getString("title"), 255), resultSet.getString("primary_service"),
+                        resultSet.getString("alert_name"), resultSet.getString("severity"), resultSet.getString("status"),
+                        instant(resultSet.getTimestamp("started_at")), instant(resultSet.getTimestamp("last_alert_at")),
+                        instant(resultSet.getTimestamp("resolved_at")), resultSet.getBoolean("has_report"),
+                        resultSet.getLong("evidence_count")));
+        var hasMore = rows.size() > limit;
+        var items = hasMore ? List.copyOf(rows.subList(0, limit)) : List.copyOf(rows);
+        var nextCursor = hasMore && !items.isEmpty() ? encodeCursor(items.getLast().lastAlertAt(), items.getLast().id()) : null;
+        return new IncidentPage(items, nextCursor, hasMore);
+    }
+
+    public IncidentDetail detail(UUID incidentId) {
+        var parameters = new MapSqlParameterSource("incidentId", incidentId);
+        return jdbcTemplate.query("""
+                SELECT i.id, i.title, i.primary_service, i.alert_name, i.severity, i.status, i.environment,
+                       i.started_at, i.detected_at, i.last_alert_at, i.resolved_at, i.updated_at,
+                       r.id AS run_id, r.status AS run_status, r.attempt, r.failure_code,
+                       r.started_at AS run_started_at, r.finished_at AS run_finished_at
+                FROM incident i
+                LEFT JOIN LATERAL (
+                    SELECT id, status, attempt, failure_code, started_at, finished_at
+                    FROM diagnosis_run WHERE incident_id = i.id ORDER BY attempt DESC LIMIT 1
+                ) r ON TRUE
+                WHERE i.id = :incidentId
+                """, parameters, (resultSet, rowNumber) -> new IncidentDetail(
+                        resultSet.getObject("id", UUID.class), bounded(resultSet.getString("title"), 255),
+                        resultSet.getString("primary_service"), resultSet.getString("alert_name"),
+                        resultSet.getString("severity"), resultSet.getString("status"), resultSet.getString("environment"),
+                        instant(resultSet.getTimestamp("started_at")), instant(resultSet.getTimestamp("detected_at")),
+                        instant(resultSet.getTimestamp("last_alert_at")), instant(resultSet.getTimestamp("resolved_at")),
+                        instant(resultSet.getTimestamp("updated_at")), resultSet.getObject("run_id", UUID.class),
+                        resultSet.getString("run_status"), resultSet.getObject("attempt", Integer.class),
+                        resultSet.getString("failure_code"), instant(resultSet.getTimestamp("run_started_at")),
+                        instant(resultSet.getTimestamp("run_finished_at"))))
+                .stream().findFirst().orElseThrow(() -> new ConsoleResourceNotFoundException("incident"));
+    }
+
+    public ReportView report(UUID incidentId) {
+        var parameters = new MapSqlParameterSource("incidentId", incidentId);
+        return jdbcTemplate.query("""
+                SELECT r.id, r.generated_at, c.name, c.description, c.affected_service,
+                       c.support_score, c.verification_status,
+                       (SELECT count(*) FROM candidate_evidence ce WHERE ce.candidate_id = c.id
+                            AND ce.relationship = 'SUPPORTING') AS supporting_count,
+                       (SELECT count(*) FROM candidate_evidence ce WHERE ce.candidate_id = c.id
+                            AND ce.relationship = 'OPPOSING') AS opposing_count
+                FROM diagnosis_report r
+                LEFT JOIN root_cause_candidate c ON c.id = r.primary_root_cause_id
+                WHERE r.incident_id = :incidentId
+                ORDER BY r.generated_at DESC LIMIT 1
+                """, parameters, (resultSet, rowNumber) -> new ReportView(resultSet.getObject("id", UUID.class),
+                        instant(resultSet.getTimestamp("generated_at")), bounded(resultSet.getString("name"), 255),
+                        bounded(resultSet.getString("description"), 2000), resultSet.getString("affected_service"),
+                        resultSet.getObject("support_score", Double.class), resultSet.getString("verification_status"),
+                        resultSet.getLong("supporting_count"), resultSet.getLong("opposing_count")))
+                .stream().findFirst().orElseThrow(() -> new ConsoleResourceNotFoundException("report"));
+    }
+
+    public List<EvidenceView> evidence(UUID incidentId) {
+        return jdbcTemplate.query("""
+                SELECT id, diagnosis_run_id, evidence_type, source, service_name, start_time, end_time,
+                       collected_at, summary, importance
+                FROM evidence WHERE incident_id = :incidentId
+                ORDER BY collected_at, id LIMIT 500
+                """, new MapSqlParameterSource("incidentId", incidentId),
+                (resultSet, rowNumber) -> new EvidenceView(resultSet.getObject("id", UUID.class),
+                        resultSet.getObject("diagnosis_run_id", UUID.class), resultSet.getString("evidence_type"),
+                        resultSet.getString("source"), resultSet.getString("service_name"),
+                        instant(resultSet.getTimestamp("start_time")), instant(resultSet.getTimestamp("end_time")),
+                        instant(resultSet.getTimestamp("collected_at")), bounded(resultSet.getString("summary"), 2000),
+                        resultSet.getDouble("importance")));
+    }
+
+    public List<TimelineEntry> timeline(UUID incidentId) {
+        detail(incidentId);
+        var parameters = new MapSqlParameterSource("incidentId", incidentId);
+        var entries = new ArrayList<TimelineEntry>();
+        entries.addAll(jdbcTemplate.query("""
+                SELECT a.id, a.alert_status, a.starts_at, a.last_received_at
+                FROM alert_event a JOIN incident_alert ia ON ia.alert_event_id = a.id
+                WHERE ia.incident_id = :incidentId ORDER BY a.last_received_at LIMIT 200
+                """, parameters, (rs, row) -> new TimelineEntry(rs.getObject("id", UUID.class),
+                        "ALERT_" + rs.getString("alert_status").toUpperCase(Locale.ROOT),
+                        instant(rs.getTimestamp("last_received_at")), "Alertmanager state received")));
+        entries.addAll(jdbcTemplate.query("""
+                SELECT id, status, COALESCE(finished_at, started_at, created_at) AS occurred_at, failure_code
+                FROM diagnosis_run WHERE incident_id = :incidentId ORDER BY attempt LIMIT 50
+                """, parameters, (rs, row) -> new TimelineEntry(rs.getObject("id", UUID.class),
+                        "DIAGNOSIS_" + rs.getString("status"), instant(rs.getTimestamp("occurred_at")),
+                        rs.getString("failure_code") == null ? "Diagnosis run state" : "Diagnosis run ended with a controlled failure")));
+        entries.addAll(jdbcTemplate.query("""
+                SELECT id, evidence_type, collected_at FROM evidence
+                WHERE incident_id = :incidentId ORDER BY collected_at LIMIT 500
+                """, parameters, (rs, row) -> new TimelineEntry(rs.getObject("id", UUID.class),
+                        "EVIDENCE_" + rs.getString("evidence_type"), instant(rs.getTimestamp("collected_at")),
+                        "Redacted evidence collected")));
+        entries.addAll(jdbcTemplate.query("""
+                SELECT id, generated_at FROM diagnosis_report
+                WHERE incident_id = :incidentId ORDER BY generated_at LIMIT 50
+                """, parameters, (rs, row) -> new TimelineEntry(rs.getObject("id", UUID.class), "REPORT_GENERATED",
+                        instant(rs.getTimestamp("generated_at")), "Deterministic report generated")));
+        entries.sort(java.util.Comparator.comparing(TimelineEntry::occurredAt));
+        return List.copyOf(entries);
+    }
+
+    public List<AiAttemptView> aiAttempts(UUID incidentId) {
+        detail(incidentId);
+        return jdbcTemplate.query("""
+                SELECT id, source_report_id, status, prompt_version, model_provider, model_name,
+                       failure_code, created_at, completed_at
+                FROM ai_diagnosis_attempt WHERE incident_id = :incidentId
+                ORDER BY created_at DESC LIMIT 100
+                """, new MapSqlParameterSource("incidentId", incidentId),
+                (rs, row) -> new AiAttemptView(rs.getObject("id", UUID.class),
+                        rs.getObject("source_report_id", UUID.class), rs.getString("status"),
+                        rs.getString("prompt_version"), rs.getString("model_provider"), rs.getString("model_name"),
+                        rs.getString("failure_code"), instant(rs.getTimestamp("created_at")),
+                        instant(rs.getTimestamp("completed_at"))));
+    }
+
+    public Overview overview() {
+        return jdbcTemplate.queryForObject("""
+                SELECT count(*) FILTER (WHERE status IN ('OPEN','DIAGNOSING','DIAGNOSED','FAILED')) AS active,
+                       count(*) FILTER (WHERE status IN ('RESOLVED','CLOSED') AND resolved_at >= CURRENT_TIMESTAMP - INTERVAL '24 hours') AS recovered,
+                       count(*) FILTER (WHERE status = 'FAILED') AS failed,
+                       max(last_alert_at) AS last_alert_at,
+                       (SELECT max(collected_at) FROM evidence) AS last_evidence_at,
+                       (SELECT count(*) FROM diagnosis_run WHERE status IN ('PENDING','LEASED','COLLECTING','EVIDENCE_READY','ANALYZING','VERIFYING','GENERATING_REPORT','RETRY_WAIT')) AS pending_runs
+                FROM incident
+                """, new MapSqlParameterSource(), (rs, row) -> new Overview(rs.getLong("active"),
+                        rs.getLong("recovered"), rs.getLong("failed"), rs.getLong("pending_runs"),
+                        instant(rs.getTimestamp("last_alert_at")), instant(rs.getTimestamp("last_evidence_at"))));
+    }
+
+    private static Cursor decodeCursor(String cursor) {
+        if (cursor == null || cursor.isBlank()) {
+            return null;
+        }
+        try {
+            var decoded = new String(Base64.getUrlDecoder().decode(cursor), StandardCharsets.US_ASCII);
+            var separator = decoded.indexOf('|');
+            if (separator < 1) {
+                throw new IllegalArgumentException("missing separator");
+            }
+            return new Cursor(Instant.parse(decoded.substring(0, separator)), UUID.fromString(decoded.substring(separator + 1)));
+        } catch (RuntimeException exception) {
+            throw new ConsoleInvalidCursorException();
+        }
+    }
+
+    private static String encodeCursor(Instant instant, UUID id) {
+        return Base64.getUrlEncoder().withoutPadding()
+                .encodeToString((instant + "|" + id).getBytes(StandardCharsets.US_ASCII));
+    }
+
+    private static String escapeLike(String value) {
+        return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_");
+    }
+
+    private static Instant instant(Timestamp value) {
+        return value == null ? null : value.toInstant();
+    }
+
+    private static String bounded(String value, int length) {
+        if (value == null) {
+            return null;
+        }
+        var cleaned = value.replaceAll("[\\p{Cntrl}&&[^\\r\\n\\t]]", " ").trim();
+        return cleaned.length() <= length ? cleaned : cleaned.substring(0, length);
+    }
+
+    private record Cursor(Instant lastAlertAt, UUID id) { }
+    public record IncidentPage(List<IncidentSummary> items, String nextCursor, boolean hasMore) { }
+    public record IncidentSummary(UUID id, String title, String primaryService, String alertName, String severity,
+            String status, Instant startedAt, Instant lastAlertAt, Instant resolvedAt, boolean hasReport,
+            long evidenceCount) { }
+    public record IncidentDetail(UUID id, String title, String primaryService, String alertName, String severity,
+            String status, String environment, Instant startedAt, Instant detectedAt, Instant lastAlertAt,
+            Instant resolvedAt, Instant updatedAt, UUID diagnosisRunId, String diagnosisRunStatus, Integer attempt,
+            String failureCode, Instant diagnosisStartedAt, Instant diagnosisFinishedAt) { }
+    public record ReportView(UUID id, Instant generatedAt, String rootCause, String description, String affectedService,
+            Double supportScore, String verificationStatus, long supportingEvidence, long opposingEvidence) { }
+    public record EvidenceView(UUID id, UUID diagnosisRunId, String type, String source, String serviceName,
+            Instant startTime, Instant endTime, Instant collectedAt, String summary, double importance) { }
+    public record TimelineEntry(UUID evidenceId, String type, Instant occurredAt, String summary) { }
+    public record AiAttemptView(UUID id, UUID sourceReportId, String status, String promptVersion, String modelProvider,
+            String modelName, String failureCode, Instant createdAt, Instant completedAt) { }
+    public record Overview(long activeIncidents, long recoveredLast24Hours, long failedIncidents, long pendingRuns,
+            Instant lastAlertAt, Instant lastEvidenceAt) { }
+}

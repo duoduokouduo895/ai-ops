@@ -1,0 +1,31 @@
+services:
+  aidiag-backend:
+    image: ${AIDIAG_IMAGE:-aidiag-backend:1.1.0-rc1}
+    environment:
+      OTEL_RESOURCE_ATTRIBUTES: service.version=${AIDIAG_RELEASE_VERSION:-1.1.0-rc1},deployment.environment.name=${DEPLOYMENT_ENVIRONMENT},service.namespace=dduo
+      AIDIAG_CONSOLE_ENABLED: ${AIDIAG_CONSOLE_ENABLED:-true}
+      AIDIAG_CONSOLE_USERNAME: ${AIDIAG_CONSOLE_USERNAME:-aidiag-admin}
+      AIDIAG_CONSOLE_ALLOWED_ORIGIN: ${AIDIAG_CONSOLE_ALLOWED_ORIGIN:-https://ops.dduo.me}
+      AIDIAG_CONSOLE_SECURE_COOKIE: "true"
+      AIDIAG_CONSOLE_IDLE_HOURS: ${AIDIAG_CONSOLE_IDLE_HOURS:-8}
+      AIDIAG_CONSOLE_ABSOLUTE_HOURS: ${AIDIAG_CONSOLE_ABSOLUTE_HOURS:-24}
+      AIDIAG_CONSOLE_MAX_SESSIONS: ${AIDIAG_CONSOLE_MAX_SESSIONS:-3}
+      AIDIAG_CONSOLE_LOCKOUT_MINUTES: ${AIDIAG_CONSOLE_LOCKOUT_MINUTES:-15}
+      AIDIAG_CONSOLE_MAX_FAILURES: ${AIDIAG_CONSOLE_MAX_FAILURES:-5}
+      AIDIAG_CONSOLE_RETENTION_DAYS: ${AIDIAG_CONSOLE_RETENTION_DAYS:-30}
+      AIDIAG_RECONCILIATION_ENABLED: ${AIDIAG_RECONCILIATION_ENABLED:-true}
+      AIDIAG_RECONCILIATION_APPLY_TRANSITIONS: ${AIDIAG_RECONCILIATION_APPLY_TRANSITIONS:-false}
+      AIDIAG_RECONCILIATION_REQUIRED_OBSERVATIONS: ${AIDIAG_RECONCILIATION_REQUIRED_OBSERVATIONS:-3}
+      AIDIAG_RECONCILIATION_GRACE_MINUTES: ${AIDIAG_RECONCILIATION_GRACE_MINUTES:-10}
+      AIDIAG_RECONCILIATION_MAX_DIAGNOSIS_ATTEMPTS: ${AIDIAG_RECONCILIATION_MAX_DIAGNOSIS_ATTEMPTS:-3}
+    secrets:
+      - source: aidiag_console_password_hash
+        target: aidiag.console.password-hash-secret
+      - source: aidiag_console_audit_pepper
+        target: aidiag.console.audit-pepper-secret
+
+secrets:
+  aidiag_console_password_hash:
+    file: ${AIDIAG_SECRETS_DIR:-./.secrets}/aidiag_console_password_hash
+  aidiag_console_audit_pepper:
+    file: ${AIDIAG_SECRETS_DIR:-./.secrets}/aidiag_console_audit_pepper

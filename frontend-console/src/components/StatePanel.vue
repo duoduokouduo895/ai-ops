@@ -1,0 +1,3 @@
+<script setup lang="ts">defineProps<{ title: string; detail?: string; action?: string }>(); defineEmits<{ action: [] }>()</script>
+<template><div class="state panel"><span class="signal">···</span><h2>{{ title }}</h2><p>{{ detail }}</p><button v-if="action" type="button" @click="$emit('action')">{{ action }}</button></div></template>
+<style scoped>.state{min-height:240px;display:grid;place-items:center;align-content:center;text-align:center;padding:28px}.signal{font:24px var(--font-mono);color:var(--accent)}h2{margin:8px 0 2px;font-size:16px}p{margin:0;color:var(--text-muted);max-width:420px}button{margin-top:18px;border:1px solid var(--line);background:var(--surface-2);color:var(--text);padding:9px 14px;border-radius:6px;cursor:pointer}</style>

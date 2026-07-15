@@ -87,6 +87,28 @@ info:
     version: "@project.version@"
 
 aidiag:
+  console:
+    enabled: ${AIDIAG_CONSOLE_ENABLED:false}
+    username: ${AIDIAG_CONSOLE_USERNAME:aidiag-admin}
+    password-hash: ${AIDIAG_CONSOLE_PASSWORD_HASH:${aidiag.console.password-hash-secret:}}
+    audit-pepper: ${AIDIAG_CONSOLE_AUDIT_PEPPER:${aidiag.console.audit-pepper-secret:}}
+    allowed-origin: ${AIDIAG_CONSOLE_ALLOWED_ORIGIN:https://ops.dduo.me}
+    secure-cookie: ${AIDIAG_CONSOLE_SECURE_COOKIE:true}
+    idle-hours: ${AIDIAG_CONSOLE_IDLE_HOURS:8}
+    absolute-hours: ${AIDIAG_CONSOLE_ABSOLUTE_HOURS:24}
+    max-sessions: ${AIDIAG_CONSOLE_MAX_SESSIONS:3}
+    lockout-minutes: ${AIDIAG_CONSOLE_LOCKOUT_MINUTES:15}
+    max-failures: ${AIDIAG_CONSOLE_MAX_FAILURES:5}
+    retention-days: ${AIDIAG_CONSOLE_RETENTION_DAYS:30}
+  catalog:
+    external-path: ${AIDIAG_CATALOG_EXTERNAL_PATH:}
+  reconciliation:
+    enabled: ${AIDIAG_RECONCILIATION_ENABLED:false}
+    apply-transitions: ${AIDIAG_RECONCILIATION_APPLY_TRANSITIONS:false}
+    alertmanager-base-url: ${AIDIAG_ALERTMANAGER_BASE_URL:http://alertmanager:9093}
+    required-observations: ${AIDIAG_RECONCILIATION_REQUIRED_OBSERVATIONS:3}
+    grace-minutes: ${AIDIAG_RECONCILIATION_GRACE_MINUTES:10}
+    maximum-diagnosis-attempts: ${AIDIAG_RECONCILIATION_MAX_DIAGNOSIS_ATTEMPTS:3}
   read-api:
     username: ${AIDIAG_READ_API_USERNAME:aidiag-reader}
     password: ${AIDIAG_READ_API_PASSWORD:${aidiag.read-api.secret:}}

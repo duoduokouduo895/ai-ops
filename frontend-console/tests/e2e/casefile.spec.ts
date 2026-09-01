@@ -23,13 +23,24 @@ test('renders the evidence-led casefile without exposing raw payloads', async ({
   await expect(page.getByRole('heading', { name:'Incident Casefile' })).toBeVisible()
   await expect(page.getByText('Model provider latency increased')).toBeVisible()
   await expect(page.getByText('Provider span exceeded the fixed reviewed threshold.')).toBeVisible()
-  await expect(page.getByText('raw payload')).toBeVisible()
+  const rawPayloadNotice = page.getByText('raw payload')
+  if (!await rawPayloadNotice.isVisible()) await page.getByText('Limitations', { exact:true }).click()
+  await expect(rawPayloadNotice).toBeVisible()
   await expect(page.locator('body')).not.toContainText('request_json')
 })
 
 test('keeps the casefile within the mobile viewport', async ({ page }) => {
   await page.goto(`/incidents/${incidentId}`)
   await expect(page.getByRole('heading', { name:'Incident Casefile' })).toBeVisible()
+  const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)
+  expect(overflow).toBeLessThanOrEqual(1)
+})
+
+test('keeps the Casefile usable at a 200 percent reflow-equivalent width', async ({ page }) => {
+  await page.setViewportSize({ width:640, height:720 })
+  await page.goto(`/incidents/${incidentId}`)
+  await expect(page.getByRole('heading', { name:'Incident Casefile' })).toBeVisible()
+  await expect(page.getByRole('button', { name:/AI advisory/ })).toBeVisible()
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)
   expect(overflow).toBeLessThanOrEqual(1)
 })

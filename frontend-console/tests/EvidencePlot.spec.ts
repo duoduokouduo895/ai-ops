@@ -9,7 +9,7 @@ describe('EvidencePlot', () => {
     const wrapper = mount(EvidencePlot, { props: { items: [evidence('a', 10), evidence('b', 90)], selected: 'b' } })
     expect(wrapper.findAll('circle')).toHaveLength(2)
     expect(wrapper.findAll('circle')[1].classes()).toContain('selected')
-    await wrapper.findAll('circle')[0].trigger('click')
+    await wrapper.get('button[aria-label*="METRIC evidence"]').trigger('click')
     expect(wrapper.emitted('select')?.[0]).toEqual(['a'])
   })
 })

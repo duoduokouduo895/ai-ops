@@ -28,17 +28,17 @@ async function submit() {
   } finally { loading.value = false }
 }
 </script>
+
 <template>
   <main class="login-page">
-    <section class="login-copy">
-      <AidiagMark />
-      <p class="eyebrow">Evidence-driven operations</p>
-      <h1>从告警到证据，<br>在一个案卷里还原故障。</h1>
-      <p class="intro">AIDiag 将 Metric、Log、Trace 与确定性诊断串成可审查的因果链。AI 建议始终低于已验证证据。</p>
-      <dl><div><dt>01</dt><dd>Observe</dd></div><div><dt>02</dt><dd>Corroborate</dd></div><div><dt>03</dt><dd>Explain</dd></div></dl>
+    <section class="login-copy" aria-labelledby="login-product-title">
+      <RouterLink class="login-brand" :to="{ name: 'login' }" aria-label="AIDiag 登录"><AidiagMark /><span>AIDiag</span></RouterLink>
+      <h1 id="login-product-title">从告警到证据，<br>在一个案卷里还原故障。</h1>
+      <p class="intro">AIDiag 将 Metric、Log、Trace 与确定性诊断串成可审查的因果链。</p>
     </section>
-    <form class="login-card panel" @submit.prevent="submit">
-      <p class="eyebrow">Console access</p><h2>登录控制台</h2><p class="hint">单管理员 · 持久化安全 Session · 无浏览器密钥</p>
+
+    <form class="login-form" @submit.prevent="submit">
+      <div class="form-heading"><h2>登录控制台</h2></div>
       <p v-if="expired" role="status" class="session-notice">会话已过期，请重新登录。未提交的修改不会被重放。</p>
       <label>管理员标识<ElInput v-model="username" maxlength="128" autocomplete="username" placeholder="aidiag-admin" /></label>
       <label>密码<ElInput v-model="password" type="password" maxlength="256" show-password autocomplete="current-password" /></label>
@@ -48,8 +48,12 @@ async function submit() {
     </form>
   </main>
 </template>
+
 <style scoped>
-.login-page{min-height:100vh;display:grid;grid-template-columns:minmax(0,1.15fr) minmax(360px,.65fr);gap:clamp(40px,8vw,140px);align-items:center;max-width:1180px;margin:auto;padding:48px 34px}.login-copy{max-width:650px}.login-copy :deep(.mark){margin-bottom:44px}.login-copy h1{font-size:clamp(40px,5vw,68px);line-height:1.06;letter-spacing:-.055em;margin:10px 0 24px;font-weight:620}.intro{color:var(--text-soft);font-size:16px;max-width:570px}.login-copy dl{display:flex;gap:28px;margin:46px 0 0}.login-copy dl div{border-top:1px solid var(--line);padding-top:12px;min-width:110px}.login-copy dt{font:11px var(--font-mono);color:var(--accent)}.login-copy dd{margin:5px 0;color:var(--text-muted)}.login-card{padding:32px}.login-card h2{font-size:25px;margin:5px 0}.hint{color:var(--text-muted);margin:0 0 28px}.login-card label{display:grid;gap:8px;color:var(--text-soft);margin:18px 0;font-size:12px}.login-card :deep(.el-input__wrapper){background:var(--surface-2);box-shadow:0 0 0 1px var(--line) inset;border-radius:6px;padding:5px 12px}.login-card :deep(.el-input__inner){color:var(--text);height:38px}.login-card :deep(.el-button){width:100%;height:46px;margin-top:8px;background:var(--accent);border-color:var(--accent);color:var(--bg);font-weight:700}.login-card small{display:block;color:var(--text-muted);margin-top:16px;text-align:center}.error{color:var(--critical);font-size:12px}
-.session-notice{border-left:2px solid var(--warning);background:color-mix(in oklch,var(--warning) 8%,transparent);color:var(--text-soft);padding:10px 12px;font-size:12px}
-@media(max-width:800px){.login-page{grid-template-columns:1fr;padding:28px 18px}.login-copy h1{font-size:38px}.login-copy dl{display:none}.login-copy :deep(.mark){margin-bottom:24px}}
+.login-page { min-height: 100vh; display: grid; grid-template-columns: minmax(0, 1.08fr) minmax(340px, .58fr); gap: clamp(48px, 9vw, 150px); align-items: center; max-width: 1180px; margin: auto; padding: 52px 34px; }
+.login-copy { max-width: 660px; }.login-brand { display: inline-flex; align-items: center; gap: 10px; margin-bottom: 52px; color: var(--text); font-weight: 650; }.login-brand :deep(.mark) { width: 31px; height: 31px; color: var(--accent-strong); }
+h1 { margin: 0; font-size: 52px; line-height: 1.08; letter-spacing: -.04em; font-weight: 650; }.intro { max-width: 60ch; margin: 24px 0 0; color: var(--text-soft); font-size: 16px; line-height: 1.7; }
+.login-form { border: 1px solid var(--line); border-radius: var(--radius-lg); background: var(--surface-1); padding: 32px; }.form-heading h2 { margin: 0 0 28px; font-size: 24px; letter-spacing: -.025em; }.login-form label { display: grid; gap: 8px; margin: 18px 0; color: var(--text-soft); font-size: 12px; font-weight: 600; }
+.login-form :deep(.el-input__wrapper) { min-height: 46px; border-radius: var(--radius-sm); background: var(--surface-2); box-shadow: 0 0 0 1px var(--line) inset; padding: 5px 12px; }.login-form :deep(.el-input__wrapper.is-focus) { box-shadow: var(--focus-ring); }.login-form :deep(.el-input__inner) { height: 36px; color: var(--text); }.login-form :deep(.el-button) { width: 100%; min-height: 46px; margin-top: 8px; border-color: var(--accent); border-radius: var(--radius-sm); background: var(--accent); color: var(--bg); font-weight: 720; }.login-form :deep(.el-button.is-disabled) { border-color: var(--line); background: var(--surface-2); color: var(--text-faint); }.login-form small { display: block; margin-top: 17px; color: var(--text-muted); text-align: center; font-size: 11px; }.error { margin: -3px 0 8px; color: var(--critical); font-size: 12px; }.session-notice { margin: 0 0 18px; border: 1px solid oklch(0.62 .09 83 / .45); border-radius: var(--radius-sm); background: var(--warning-soft); padding: 10px 12px; color: var(--text-soft); font-size: 12px; }
+@media (max-width: 800px) { .login-page { grid-template-columns: 1fr; gap: 38px; padding: 30px 18px; }.login-brand { margin-bottom: 34px; } h1 { font-size: 38px; }.login-form { padding: 24px; } }
 </style>

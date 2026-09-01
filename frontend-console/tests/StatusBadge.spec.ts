@@ -9,8 +9,8 @@ describe('StatusBadge', () => {
     expect(wrapper.attributes('data-tone')).toBe('success')
   })
 
-  it('does not present unknown as healthy', () => {
+  it('keeps unknown distinct from healthy and warning states', () => {
     const wrapper = mount(StatusBadge, { props: { value: 'UNKNOWN' } })
-    expect(wrapper.attributes('data-tone')).toBe('warning')
+    expect(wrapper.attributes('data-tone')).toBe('unknown')
   })
 })

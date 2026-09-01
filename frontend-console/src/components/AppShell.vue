@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useSessionStore } from '../stores/session'
 import AidiagMark from './AidiagMark.vue'
@@ -8,13 +8,21 @@ defineProps<{ section: string }>()
 const router = useRouter()
 const session = useSessionStore()
 const mobileNavOpen = ref(false)
+const signingOut = ref(false)
 const nav = [
   { name: 'inbox', label: 'Inbox' },
   { name: 'incidents', label: 'Incidents' },
   { name: 'services', label: 'Services' },
 ]
-async function signOut() { await session.logout(); await router.push({ name: 'login' }) }
+async function signOut() {
+  if (signingOut.value) return
+  signingOut.value = true
+  try { await session.logout(); await router.push({ name: 'login' }) } finally { signingOut.value = false }
+}
 function closeMobileNav() { mobileNavOpen.value = false }
+function onKeydown(event: KeyboardEvent) { if (event.key === 'Escape') closeMobileNav() }
+onMounted(() => window.addEventListener('keydown', onKeydown))
+onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
 </script>
 
 <template>
@@ -29,7 +37,7 @@ function closeMobileNav() { mobileNavOpen.value = false }
           <span>{{ item.label }}</span>
         </RouterLink>
       </nav>
-      <div class="rail-footer"><button class="signout" type="button" @click="signOut">Sign out</button></div>
+      <div class="rail-footer"><button class="signout" type="button" :disabled="signingOut" :aria-busy="signingOut" @click="signOut">{{ signingOut ? 'Signing out…' : 'Sign out' }}</button></div>
     </aside>
 
     <header class="mobile-bar">
@@ -41,7 +49,7 @@ function closeMobileNav() { mobileNavOpen.value = false }
         <RouterLink v-for="item in nav" :key="item.name" :to="{ name: item.name }" :class="{ active: section === item.name }" @click="closeMobileNav">
           <span>{{ item.label }}</span>
         </RouterLink>
-        <button type="button" @click="signOut">Sign out</button>
+        <button type="button" :disabled="signingOut" :aria-busy="signingOut" @click="signOut">{{ signingOut ? 'Signing out…' : 'Sign out' }}</button>
       </nav>
     </Transition>
     <main class="workspace"><slot /></main>
@@ -60,8 +68,9 @@ function closeMobileNav() { mobileNavOpen.value = false }
 .desktop-nav a.active { border-color: oklch(0.51 0.09 288 / .5); background: var(--accent-wash); color: var(--text); }
 .desktop-nav span { font-size: 13px; font-weight: 610; }
 .rail-footer { display: grid; gap: 10px; margin-top: auto; padding: 12px 8px 4px; border-top: 1px solid var(--line-soft); }
-.signout { width: fit-content; border: 0; background: transparent; color: var(--text-muted); padding: 4px 0; cursor: pointer; font-size: 12px; }
+.signout { display: inline-flex; width: fit-content; min-height: 44px; align-items: center; border: 0; background: transparent; color: var(--text-muted); padding: 0; cursor: pointer; font-size: 12px; }
 .signout:hover { color: var(--text); }
+.signout:disabled { color: var(--text-faint); cursor: wait; }
 .workspace { min-width: 0; padding: 34px clamp(24px, 4vw, 64px) 56px; }
 .mobile-bar, .mobile-nav { display: none; }
 .drawer-enter-active, .drawer-leave-active { transition: opacity var(--duration-base) var(--ease), transform var(--duration-base) var(--ease); }
@@ -72,11 +81,12 @@ function closeMobileNav() { mobileNavOpen.value = false }
   .mobile-bar { position: sticky; z-index: 20; top: 0; display: flex; min-height: 60px; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--line); background: var(--surface-0); padding: 0 16px; }
   .mobile-brand { display: flex; align-items: center; gap: 8px; font-weight: 650; font-size: 14px; }
   .mobile-brand :deep(.mark) { width: 25px; height: 25px; color: var(--accent-strong); }
-  .menu-button { min-height: 40px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--surface-1); padding: 0 12px; color: var(--text-soft); cursor: pointer; font-size: 12px; }
+  .menu-button { min-height: 44px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--surface-1); padding: 0 12px; color: var(--text-soft); cursor: pointer; font-size: 12px; }
   .mobile-nav { position: fixed; z-index: 19; top: 60px; right: 0; left: 0; display: grid; border-bottom: 1px solid var(--line); background: var(--surface-0); padding: 10px 16px 16px; }
 .mobile-nav a, .mobile-nav button { display: flex; min-height: 48px; align-items: center; border: 0; border-bottom: 1px solid var(--line-soft); background: transparent; padding: 0 2px; color: var(--text-soft); text-align: left; }
   .mobile-nav a.active { color: var(--accent-strong); }
   .mobile-nav button { color: var(--text-muted); cursor: pointer; }
+  .mobile-nav button:disabled { color: var(--text-faint); cursor: wait; }
   .workspace { padding: 26px 16px 40px; }
 }
 </style>

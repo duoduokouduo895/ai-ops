@@ -9,8 +9,9 @@ const tone = (value: string) => ['UP', 'RESOLVED', 'CLOSED', 'COMPLETED', 'SUPPO
 <template><span class="badge" :data-tone="tone(value)"><i aria-hidden="true" /><span>{{ value }}</span></span></template>
 
 <style scoped>
-.badge { display: inline-flex; max-width: 100%; align-items: center; gap: 7px; color: var(--text-soft); font: 600 10px/1.2 var(--font-mono); letter-spacing: .035em; white-space: nowrap; }
+.badge { display: inline-flex; max-width: 100%; align-items: center; gap: 7px; color: var(--text-soft); font: 600 12px/1.25 var(--font-mono); letter-spacing: .025em; }
 .badge i { width: 7px; height: 7px; flex: 0 0 auto; border: 1px solid currentColor; border-radius: 50%; background: transparent; }
+.badge span { min-width: 0; overflow-wrap: anywhere; }
 .badge[data-tone="success"] { color: var(--success); }.badge[data-tone="success"] i { background: var(--success); }
 .badge[data-tone="warning"] { color: var(--warning); }.badge[data-tone="warning"] i { background: var(--warning); }
 .badge[data-tone="critical"] { color: var(--critical); }.badge[data-tone="critical"] i { background: var(--critical); }

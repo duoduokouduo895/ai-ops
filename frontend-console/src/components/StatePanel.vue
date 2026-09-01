@@ -4,7 +4,7 @@ defineEmits<{ action: [] }>()
 </script>
 
 <template>
-  <section class="state" :data-kind="kind" :aria-live="kind === 'loading' ? 'polite' : undefined">
+  <section class="state" :data-kind="kind" :role="kind === 'error' ? 'alert' : kind === 'loading' || kind === 'success' ? 'status' : undefined" :aria-live="kind === 'loading' || kind === 'success' ? 'polite' : undefined">
     <span class="state-mark" aria-hidden="true"><i /><i /><i /></span>
     <div><h2>{{ title }}</h2><p v-if="detail">{{ detail }}</p></div>
     <button v-if="action" class="action-button" type="button" @click="$emit('action')">{{ action }}</button>

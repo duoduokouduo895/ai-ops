@@ -3,7 +3,7 @@ import { computed } from 'vue'
 import type { Evidence } from '../api/types'
 const props = defineProps<{ items: Evidence[]; selected?: string }>()
 const emit = defineEmits<{ select: [id: string] }>()
-const points = computed(() => props.items.slice(0, 60).map((item, index) => ({ item, x: props.items.length <= 1 ? 50 : 4 + (index / (Math.min(props.items.length, 60) - 1)) * 92, y: 88 - Math.max(0, Math.min(100, item.importance)) * .7 })))
+const points = computed(() => props.items.slice(0, 60).map((item, index) => ({ item, x: props.items.length <= 1 ? 50 : 8 + (index / (Math.min(props.items.length, 60) - 1)) * 84, y: 88 - Math.max(0, Math.min(100, item.importance)) * .7 })))
 const path = computed(() => points.value.map((point, index) => `${index ? 'L' : 'M'} ${point.x} ${point.y}`).join(' '))
 const canDirectlySelect = computed(() => points.value.length <= 12)
 </script>

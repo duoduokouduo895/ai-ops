@@ -13,7 +13,6 @@ services:
       - { id: redis, kind: tcp, target: "redis:6379" }
       - { id: rabbitmq, kind: tcp, target: "rabbitmq:5672" }
       - { id: elasticsearch, kind: tcp, target: "elasticsearch-v9-candidate:9200" }
-      - { id: nacos, kind: tcp, target: "nacos-v3-candidate:8848" }
       - { id: public-api, kind: http, target: "https://api.dduo.me/actuator/health", signalComponent: public_ingress }
   - id: aidiag
     displayName: AIDiag

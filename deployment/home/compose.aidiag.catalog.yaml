@@ -1,0 +1,11 @@
+services:
+  aidiag-backend:
+    environment:
+      AIDIAG_CATALOG_EXTERNAL_PATH: /opt/aidiag/catalog/catalog.yml
+    volumes:
+      - type: bind
+        source: /opt/aidiag-home/runtime/catalog
+        target: /opt/aidiag/catalog
+        read_only: true
+        bind:
+          create_host_path: false

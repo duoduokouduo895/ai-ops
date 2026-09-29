@@ -7,6 +7,13 @@
 Nacos 3 暂时保留运行，供上一版 AI-chat release 回滚；新版本的 AI-chat 不再依赖它。
 只有新版本完成业务验收、回滚窗口结束并核对实际监控目标后，才能另行停止 Nacos。
 
+现有 AIDiag 镜像可通过 `compose.aidiag.catalog.yaml` 加载外部服务目录，无需重建应用。
+将已审核的 `src/main/resources/service-catalog/catalog.yml` 放到
+`/opt/aidiag-home/runtime/catalog/catalog.yml`（非密钥文件，目录 `0755`、文件 `0644`），
+在 AIDiag 原有 Compose 文件之后追加该覆盖，只重建 `aidiag-backend`。
+此目录去掉 AI-chat 的 Nacos 依赖；Prometheus 的运行目标由
+`activate-ai-chat-home-monitoring.sh` 同步更新。保留原 Compose 命令和目标文件备份供回滚。
+
 不启动：旧 Nacos 2、旧 Elasticsearch 8、Fault Lab、历史 Prometheus/Loki/Tempo 数据与过期 release。
 
 资源上限合计约 7.7GiB；实际运行量通常更低，但仍需保留约 1.5GiB 给 Ubuntu、Docker 与突发缓存。任何服务持续接近其上限时，应先观察 Grafana，再调高单项上限，不要整体放宽。

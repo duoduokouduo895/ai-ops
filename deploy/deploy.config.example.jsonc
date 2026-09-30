@@ -1,0 +1,58 @@
+{
+  // The real file is deploy/deploy.config.json. Remove comments before saving it.
+  "$schema": "./deploy.config.schema.json",
+  "schemaVersion": "1.0.0",
+  "project": {
+    "name": "aidiag-console",
+    "displayName": "AIDiag Console",
+    "environment": "prod"
+  },
+  "frontend": {
+    "enabled": true,
+    "deployType": "cloudflare-pages",
+    "localPath": "frontend-console",
+    "installStrategy": "npm-ci",
+    "buildCommand": "npm run build",
+    "buildOutputDir": "frontend-console/dist",
+    "publicUrl": "https://ops.dduo.me",
+    "previewUrl": "",
+    // Dedicated build-time API target. This is public configuration, not a secret.
+    "apiBaseUrl": "https://ops-api.dduo.me/api/v1/console",
+    "healthCheckPaths": [
+      "/",
+      "/login"
+    ],
+    "acceptableStatusCodes": [
+      200
+    ]
+  },
+  "backend": {
+    "enabled": false,
+    "deployType": "springboot-jar-ssh"
+  },
+  "platform": {
+    "cloudflare": {
+      // Fill this with the existing Pages project name; do not create a new project here.
+      "pagesProjectName": "REPLACE_WITH_EXISTING_CLOUDFLARE_PAGES_PROJECT_NAME",
+      "customDomain": "ops.dduo.me",
+      "previewUrl": ""
+    }
+  },
+  "checks": {
+    "enableFrontendCheck": true,
+    "enableBackendCheck": false,
+    "enableCorsCheck": true,
+    "enableSseCheck": false,
+    "corsOrigin": "https://ops.dduo.me",
+    "corsLoginUrl": "https://ops-api.dduo.me/api/v1/console/session",
+    "corsRequestMethod": "POST",
+    "corsRequestHeaders": "Content-Type,X-AIDiag-CSRF,X-Request-Id",
+    "sseUrl": "",
+    "extraRouteChecks": []
+  },
+  "rollback": {
+    "enabled": true,
+    "keepReleases": 5,
+    "remoteBackupDir": ""
+  }
+}

@@ -14,41 +14,16 @@
 - AI-chat 专用凭据副本使用 `10001:10001` 和 mode `0400`，因为 Docker Compose 的 file Secret 会保留宿主机所有权，不能依赖 overlay 中的 `uid/gid/mode`；
 - 8848/9848 只映射到 `127.0.0.1`，容器同时加入 AI-chat 所需的私有网络；
 - Nacos 上游启动脚本会开启 `set -x`，本目录的 wrapper 使用 `BASH_XTRACEFD` 丢弃 xtrace，避免 Secret 进入 Docker 日志；
-- 停止脚本不删除数据库、备份、Secret 或 volumes。任何清理动作都需要另行评审与确认。
+- 任何删除数据库、备份、Secret 或 volumes 的清理动作都需要另行评审与确认。
 
-## 执行顺序
+## 当前用法
 
-以下脚本必须在不可变 AIDiag release 目录中执行：
+家庭服务器以本目录的 `compose.yaml` 为基础，叠加
+[`deployment/home/compose.nacos.home.yaml`](../../deployment/home/compose.nacos.home.yaml)，容器名为 `nacos-v3`。
+Nacos 3 仅为上一版 AI-chat 的回滚窗口保留，新版 AI-chat 已不依赖它（见
+[`deployment/home/README.md`](../../deployment/home/README.md)）。
 
-```bash
-NACOS3_CANDIDATE_CONFIRMED=CREATE_ISOLATED_NACOS3_CANDIDATE \
-  ./scripts/cloud-prepare-nacos3-candidate.sh /opt/aidiag/releases/<release>
-
-./scripts/cloud-verify-nacos3-candidate.sh /opt/aidiag/releases/<release>
-```
-
-准备脚本会先检查资源、现有容器、端口、网络、数据库冲突和旧表数据，再进行完整逻辑备份。随后下载固定 commit 的官方 schema 并校验 SHA-256，创建独立数据库、迁移白名单数据、启动候选、初始化管理员和 AI-chat 最小权限用户，最后把候选凭据安装到 `/opt/ai-chat/runtime/.secrets/candidate`。验证会再次比较源库与候选库的 `config_info`、`his_config_info` 精确行数，并拒绝空 namespace、`skill_enc.*` 或 `agentspec__enc.*` 数据。
-
-如果保留失败候选并以新数据库、新 volumes 重试，可在执行准备脚本时覆盖 `NACOS3_BASE_DIR`、`NACOS3_DB_NAME`、`NACOS3_DB_USER`、`NACOS3_COMPOSE_PROJECT`、`NACOS3_LOGS_VOLUME` 和 `NACOS3_DATA_VOLUME`。这些名称会固化到候选的 `runtime/candidate.env`，后续 start/stop 会自动沿用，避免误操作旧候选资源。
-
-停止与恢复候选：
-
-```bash
-NACOS3_STOP_CONFIRMED=STOP_ISOLATED_NACOS3 \
-  ./scripts/cloud-stop-nacos3-candidate.sh /opt/aidiag/releases/<release>
-
-NACOS3_START_CONFIRMED=START_ISOLATED_NACOS3 \
-  ./scripts/cloud-start-nacos3-candidate.sh /opt/aidiag/releases/<release>
-```
-
-仅当首次准备已经创建数据库和 volumes、但在管理员初始化前失败时，才使用恢复脚本；它会要求认证表仍为空：
-
-```bash
-NACOS3_RESUME_CONFIRMED=RESUME_ISOLATED_NACOS3 \
-  ./scripts/cloud-resume-nacos3-candidate.sh /opt/aidiag/releases/<release>
-```
-
-停止只影响 `nacos-v3-candidate`。当前 `nacos` 2.1.1、AI-chat 旧候选、Nginx 与 DNS 均保持不变。
+GCP 时期的准备、验证、启停与恢复脚本已随 GCP 下线移除，需要时可在 Git 历史中查阅。
 
 V1 生产不会把 `nacos` 旧别名改指向 3.x。维护窗口内使用本文件重新创建已验收候选后，
 同一容器会额外获得 `nacos-v3` 稳定别名；候选仍使用 `nacos-v3-candidate`。这样生产和候选可以使用

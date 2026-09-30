@@ -12,31 +12,13 @@
 - AI-chat 用户只允许访问 `conversations`、`knowledge_base_chunks`、`knowledge_base_embeddings*` 与迁移期 `kb_*` 索引；
 - 停止和失败回滚均保留数据卷与证据，任何删除操作需要另行确认。
 
-## 执行
+## 当前用法
 
-```bash
-ELASTICSEARCH9_CANDIDATE_CONFIRMED=CREATE_ISOLATED_ELASTICSEARCH9_CANDIDATE \
-  ./scripts/cloud-prepare-elasticsearch9-candidate.sh /opt/aidiag/releases/<release>
+家庭服务器以本目录的 `compose.yaml` 为基础，叠加
+[`deployment/home/compose.elasticsearch.home.yaml`](../../deployment/home/compose.elasticsearch.home.yaml)
+（固定 1g 堆、2g 容器上限，关闭 ML 与 Watcher），容器名为 `elasticsearch-v9`。
 
-./scripts/cloud-verify-elasticsearch9-candidate.sh /opt/aidiag/releases/<release>
-```
-
-首次启动在 native user 初始化前失败且脚本已经停止候选时，使用保留数据的恢复入口；它不会删除或重建 Secret：
-
-```bash
-ELASTICSEARCH9_RESUME_CONFIRMED=RESUME_ISOLATED_ELASTICSEARCH9 \
-  ./scripts/cloud-resume-elasticsearch9-candidate.sh /opt/aidiag/releases/<release>
-```
-
-停止与恢复只影响隔离候选：
-
-```bash
-ELASTICSEARCH9_STOP_CONFIRMED=STOP_ISOLATED_ELASTICSEARCH9 \
-  ./scripts/cloud-stop-elasticsearch9-candidate.sh /opt/aidiag/releases/<release>
-
-ELASTICSEARCH9_START_CONFIRMED=START_ISOLATED_ELASTICSEARCH9 \
-  ./scripts/cloud-start-elasticsearch9-candidate.sh /opt/aidiag/releases/<release>
-```
+GCP 时期的准备、验证、启停与恢复脚本已随 GCP 下线移除，需要时可在 Git 历史中查阅。
 
 V1 生产不替换现有 `elasticsearch` 8.13.4 别名。维护窗口内用本 Compose 重新创建已验收的
 Elasticsearch 9.3.2 + IK 容器后，它会额外获得 `elasticsearch-v9` 稳定别名；候选继续使用

@@ -64,33 +64,6 @@ class ProductionMonitoringContractTests {
         assertDashboardUsesVariable("infra/grafana/dashboards/ai-chat-break-glass.json");
     }
 
-    @Test
-    void activationAndRollbackAreCutoverBoundAndFailClosed() throws IOException {
-        var activation = read("scripts/cloud-activate-ai-chat-production-monitoring.sh");
-        var rollback = read("scripts/cloud-rollback-ai-chat-production-monitoring.sh");
-        var verification = read("scripts/cloud-verify-ai-chat-monitoring.sh");
-
-        assertThat(activation)
-                .contains("ACTIVATE_AI_CHAT_PRODUCTION_MONITORING", "AICHAT_CUTOVER_ID=${cutover_id}")
-                .contains("elasticsearch-v9:9200", "nacos-v3:8848")
-                .contains("AICHAT_PUBLIC_HEALTH_URL", "target_kind\": \"ingress")
-                .contains("AICHAT_PRODUCTION_CONFIRMED true")
-                .contains("OLD_PRODUCTION_WRITERS_STOPPED=true", "PRODUCTION_ACTIVATION_APPROVED=true")
-                .contains("sha256sum --check", "gzip --test")
-                .contains("AI-chat candidate must be stopped before production monitoring activation")
-                .contains("Candidate monitoring definitions must remain present")
-                .contains("flock -n 9")
-                .contains("production_targets=8", "candidate_targets=unchanged");
-        assertThat(rollback)
-                .contains("ROLLBACK_AI_CHAT_PRODUCTION_MONITORING")
-                .contains("Stop AI-chat production before removing its monitoring targets")
-                .contains("flock -n 9")
-                .contains("candidate_targets=unchanged");
-        assertThat(verification)
-                .contains("expected_probes", "actual_probes != expected_probes[service]")
-                .contains("result.get(\"metric\", {}).get(\"instance\") in expected_probes[service]");
-    }
-
     private void assertDashboardUsesVariable(String path) throws IOException {
         JsonNode dashboard = objectMapper.readTree(Path.of(path).toFile());
         var variable = dashboard.path("templating").path("list").findValue("name");

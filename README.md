@@ -113,7 +113,8 @@ npm run build                     # 类型检查 + 构建 + 首屏体积门禁
 | `fault-lab/` | 受控故障注入服务与 Ground Truth |
 | `deployment/home/` | 家庭服务器 Compose 覆盖与采集脚本 |
 | `homeops-console/` | 家庭服务器独立只读概览（与 AIDiag 分开部署） |
-| `deploy/`、`scripts/` | 发布与云端激活脚本 |
+| `deploy/` | frontend-console 发布到 Cloudflare Pages |
+| `scripts/` | Alertmanager Webhook 鉴权只读校验 |
 | `docs/` | 学习与面试资料 |
 
 ## 边界与诚实声明

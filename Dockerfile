@@ -21,9 +21,6 @@ COPY infra/prometheus/rules/aidiag.yml ./infra/prometheus/rules/aidiag.yml
 COPY infra/alloy/config.alloy ./infra/alloy/config.alloy
 COPY infra/grafana/dashboards/ai-chat-operations.json ./infra/grafana/dashboards/ai-chat-operations.json
 COPY infra/grafana/dashboards/ai-chat-break-glass.json ./infra/grafana/dashboards/ai-chat-break-glass.json
-COPY scripts/cloud-activate-ai-chat-production-monitoring.sh ./scripts/cloud-activate-ai-chat-production-monitoring.sh
-COPY scripts/cloud-rollback-ai-chat-production-monitoring.sh ./scripts/cloud-rollback-ai-chat-production-monitoring.sh
-COPY scripts/cloud-verify-ai-chat-monitoring.sh ./scripts/cloud-verify-ai-chat-monitoring.sh
 RUN mvn -B -ntp verify
 
 FROM eclipse-temurin:21.0.11_10-jre-noble@sha256:c978ac6dd6aa90ec21935eb6c848f50ebf9b783160eefdd6accd8d2fd9ebeef1

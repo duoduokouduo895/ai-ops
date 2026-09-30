@@ -24,3 +24,4 @@ data/
 *.log
 *.dump
 hs_err_pid*
+__pycache__/

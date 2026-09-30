@@ -13,6 +13,23 @@ class ConsoleIncidentQueryServiceTests {
     private static final Instant GENERATED_AT = Instant.parse("2026-07-15T05:47:57Z");
 
     @Test
+    void metricSeriesExposesOnlyNumericCurveFields() {
+        var service = new ConsoleIncidentQueryService(null, new com.fasterxml.jackson.databind.ObjectMapper());
+
+        var series = service.metricSeries("""
+                {"sampleCount":3,"maximum":4.0,"threshold":1,"query":"secret",
+                 "series":[[100,1],[130,4],["x",2],[160,"NaN"]]}
+                """);
+
+        assertThat(series.threshold()).isEqualTo(1.0);
+        assertThat(series.maximum()).isEqualTo(4.0);
+        assertThat(series.points()).hasSize(2);
+        assertThat(series.points().get(1)).containsExactly(130, 4);
+        assertThat(service.metricSeries(null)).isNull();
+        assertThat(service.metricSeries("not json")).isNull();
+    }
+
+    @Test
     void supportedPrimaryIsTheOnlyRootCause() {
         var runId = UUID.randomUUID();
         var primary = candidate(runId, 1, "SUPPORTED", "pool exhaustion");

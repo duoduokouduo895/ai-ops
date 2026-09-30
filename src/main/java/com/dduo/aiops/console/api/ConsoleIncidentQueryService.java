@@ -3,6 +3,8 @@ package com.dduo.aiops.console.api;
 import java.nio.charset.StandardCharsets;
 import java.sql.Timestamp;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
@@ -136,7 +138,8 @@ public class ConsoleIncidentQueryService {
     public List<EvidenceView> evidence(UUID incidentId) {
         return jdbcTemplate.query("""
                 SELECT id, diagnosis_run_id, evidence_type, source, service_name, start_time, end_time,
-                       collected_at, summary, importance
+                       collected_at, summary, importance,
+                       CASE WHEN evidence_type = 'METRIC' THEN raw_data END AS metric_raw
                 FROM evidence WHERE incident_id = :incidentId
                 ORDER BY collected_at, id LIMIT 500
                 """, new MapSqlParameterSource("incidentId", incidentId),
@@ -145,7 +148,33 @@ public class ConsoleIncidentQueryService {
                         resultSet.getString("source"), resultSet.getString("service_name"),
                         instant(resultSet.getTimestamp("start_time")), instant(resultSet.getTimestamp("end_time")),
                         instant(resultSet.getTimestamp("collected_at")), bounded(resultSet.getString("summary"), 2000),
-                        resultSet.getDouble("importance")));
+                        resultSet.getDouble("importance"), metricSeries(resultSet.getObject("metric_raw"))));
+    }
+
+    /**
+     * Daily incident counts in UTC days. The browser picks only the day count (7-30); buckets come from
+     * generate_series so days without incidents are returned as explicit zeros rather than missing points.
+     */
+    public IncidentTrend trend(int days) {
+        var today = LocalDate.now(ZoneOffset.UTC);
+        var first = today.minusDays(days - 1L);
+        var parameters = new MapSqlParameterSource("start", Timestamp.from(first.atStartOfDay(ZoneOffset.UTC).toInstant()))
+                .addValue("end", Timestamp.from(today.atStartOfDay(ZoneOffset.UTC).toInstant()));
+        var items = jdbcTemplate.query("""
+                SELECT d.day,
+                       count(i.id) FILTER (WHERE i.started_at >= d.day AND i.started_at < d.day + INTERVAL '1 day') AS opened,
+                       count(i.id) FILTER (WHERE i.started_at >= d.day AND i.started_at < d.day + INTERVAL '1 day'
+                                            AND i.severity = 'CRITICAL') AS critical,
+                       count(i.id) FILTER (WHERE i.resolved_at >= d.day AND i.resolved_at < d.day + INTERVAL '1 day') AS resolved
+                FROM generate_series(CAST(:start AS timestamptz), CAST(:end AS timestamptz), INTERVAL '1 day') AS d(day)
+                LEFT JOIN incident i
+                       ON (i.started_at >= d.day AND i.started_at < d.day + INTERVAL '1 day')
+                       OR (i.resolved_at >= d.day AND i.resolved_at < d.day + INTERVAL '1 day')
+                GROUP BY d.day ORDER BY d.day
+                """, parameters, (rs, row) -> new TrendDay(
+                        rs.getTimestamp("day").toInstant().atOffset(ZoneOffset.UTC).toLocalDate(),
+                        rs.getLong("opened"), rs.getLong("critical"), rs.getLong("resolved")));
+        return new IncidentTrend(days, "UTC", List.copyOf(items));
     }
 
     public List<TimelineEntry> timeline(UUID incidentId) {
@@ -266,6 +295,33 @@ public class ConsoleIncidentQueryService {
         }
     }
 
+    /** Only numeric fields of METRIC raw data cross the boundary; query specs and labels never do. */
+    MetricSeries metricSeries(Object raw) {
+        if (raw == null) {
+            return null;
+        }
+        try {
+            JsonNode node = objectMapper.readTree(raw.toString());
+            var threshold = finite(node.path("threshold"));
+            var maximum = finite(node.path("maximum"));
+            var points = new ArrayList<double[]>();
+            for (var point : node.path("series")) {
+                var time = finite(point.path(0));
+                var value = finite(point.path(1));
+                if (time != null && value != null && points.size() < MetricSeries.MAX_POINTS) {
+                    points.add(new double[] {time, value});
+                }
+            }
+            return new MetricSeries(threshold, maximum, List.copyOf(points));
+        } catch (Exception exception) {
+            return null;
+        }
+    }
+
+    private static Double finite(JsonNode node) {
+        return node.isNumber() && Double.isFinite(node.asDouble()) ? node.asDouble() : null;
+    }
+
     private static String bounded(String value, int length) {
         if (value == null) {
             return null;
@@ -291,7 +347,14 @@ public class ConsoleIncidentQueryService {
     public record ReportCandidateView(UUID id, int rank, String name, String description, String affectedService,
             Double supportScore, String verificationStatus, long supportingEvidence, long opposingEvidence) { }
     public record EvidenceView(UUID id, UUID diagnosisRunId, String type, String source, String serviceName,
-            Instant startTime, Instant endTime, Instant collectedAt, String summary, double importance) { }
+            Instant startTime, Instant endTime, Instant collectedAt, String summary, double importance,
+            MetricSeries metric) { }
+    /** Downsampled metric curve for METRIC evidence; points are {@code [epochSeconds, value]}. */
+    public record MetricSeries(Double threshold, Double maximum, List<double[]> points) {
+        static final int MAX_POINTS = 240;
+    }
+    public record IncidentTrend(int days, String zone, List<TrendDay> items) { }
+    public record TrendDay(LocalDate day, long opened, long critical, long resolved) { }
     public record TimelineEntry(UUID evidenceId, String type, Instant occurredAt, String summary, String referenceKind,
             UUID referenceId) { }
     public record AiAttemptView(UUID id, UUID sourceReportId, String status, String promptVersion, String modelProvider,

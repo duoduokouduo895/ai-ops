@@ -37,6 +37,23 @@ class ConsoleIncidentQueryPostgresTests {
     }
 
     @Test
+    void trendReturnsOneBucketPerDayIncludingEmptyDays() {
+        jdbcTemplate.getJdbcTemplate().update("""
+                INSERT INTO incident (id, title, primary_service, alert_name, severity, status, started_at, detected_at,
+                                      correlation_key, environment, last_alert_at)
+                VALUES ('00000000-0000-4000-8000-000000000071', 'trend', 'ai-chat', 'AiChatModelTimeout', 'CRITICAL',
+                        'OPEN', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 'corr-trend-sql', 'local', CURRENT_TIMESTAMP)
+                """);
+
+        var trend = queryService.trend(7);
+
+        assertThat(trend.items()).hasSize(7);
+        assertThat(trend.items().getLast().opened()).isGreaterThanOrEqualTo(1);
+        assertThat(trend.items().getLast().critical()).isGreaterThanOrEqualTo(1);
+        assertThat(trend.items().getFirst().day()).isEqualTo(trend.items().getLast().day().minusDays(6));
+    }
+
+    @Test
     void missingReportIsNotFound() {
         assertThatThrownBy(() -> queryService.report(UUID.fromString("00000000-0000-4000-8000-000000000099")))
                 .isInstanceOf(ConsoleResourceNotFoundException.class);

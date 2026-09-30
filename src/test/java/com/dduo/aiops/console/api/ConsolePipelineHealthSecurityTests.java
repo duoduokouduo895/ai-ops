@@ -1,5 +1,6 @@
 package com.dduo.aiops.console.api;
 
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
@@ -26,6 +27,8 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import com.dduo.aiops.monitoring.ServiceSignalsService;
+import com.dduo.aiops.monitoring.SignalRange;
 import org.springframework.test.web.servlet.MockMvc;
 import jakarta.servlet.http.Cookie;
 
@@ -55,6 +58,9 @@ class ConsolePipelineHealthSecurityTests {
     @MockitoBean
     ConsoleSessionService sessionService;
 
+    @MockitoBean
+    ServiceSignalsService signalsService;
+
     @Test
     void pipelineHealthRequiresAConsoleSession() throws Exception {
         mockMvc.perform(get("/api/v1/console/pipeline-health"))
@@ -79,6 +85,38 @@ class ConsolePipelineHealthSecurityTests {
                 .andExpect(jsonPath("$.pipelineStatus").value("NOT_SAMPLED"))
                 .andExpect(jsonPath("$.pendingRuns").value(org.hamcrest.Matchers.nullValue()))
                 .andExpect(jsonPath("$.reason").value("NOT_SAMPLED"));
+    }
+
+    @Test
+    void serviceSignalsRequireASessionAndOnlyAcceptFixedRanges() throws Exception {
+        mockMvc.perform(get("/api/v1/console/services/ai-chat/signals"))
+                .andExpect(status().isUnauthorized());
+
+        signIn();
+        mockMvc.perform(get("/api/v1/console/services/ai-chat/signals").param("range", "7d")
+                        .header("Origin", "https://ops.dduo.me")
+                        .cookie(new Cookie("AIDIAG_CONSOLE_SESSION", "opaque-session-token-that-is-long-enough")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("CONSOLE_INVALID_REQUEST"));
+        verifyNoInteractions(signalsService);
+    }
+
+    @Test
+    void unknownSignalServiceIsNotFound() throws Exception {
+        signIn();
+        when(signalsService.signals("aidiag", SignalRange.ONE_HOUR)).thenReturn(Optional.empty());
+
+        mockMvc.perform(get("/api/v1/console/services/aidiag/signals")
+                        .header("Origin", "https://ops.dduo.me")
+                        .cookie(new Cookie("AIDIAG_CONSOLE_SESSION", "opaque-session-token-that-is-long-enough")))
+                .andExpect(status().isNotFound());
+    }
+
+    private void signIn() {
+        var record = new ConsoleSessionRepository.SessionRecord(UUID.randomUUID(), "aidiag-admin",
+                Instant.parse("2026-09-10T06:00:00Z"), Instant.parse("2026-09-10T06:00:00Z"),
+                Instant.parse("2026-09-10T14:00:00Z"), Instant.parse("2026-09-11T06:00:00Z"));
+        when(sessionService.authenticate("opaque-session-token-that-is-long-enough")).thenReturn(Optional.of(record));
     }
 
     @Configuration(proxyBeanMethods = false)

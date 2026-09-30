@@ -5,6 +5,8 @@ import java.util.UUID;
 
 import com.dduo.aiops.catalog.AidiagSelfMonitoring;
 import com.dduo.aiops.catalog.CatalogHealthService;
+import com.dduo.aiops.monitoring.ServiceSignalsService;
+import com.dduo.aiops.monitoring.SignalRange;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.Pattern;
@@ -30,12 +32,14 @@ public class ConsoleApiController {
     private final ConsoleIncidentQueryService queryService;
     private final CatalogHealthService catalogHealthService;
     private final AidiagSelfMonitoring selfMonitoring;
+    private final ServiceSignalsService signalsService;
 
     public ConsoleApiController(ConsoleIncidentQueryService queryService, CatalogHealthService catalogHealthService,
-            AidiagSelfMonitoring selfMonitoring) {
+            AidiagSelfMonitoring selfMonitoring, ServiceSignalsService signalsService) {
         this.queryService = queryService;
         this.catalogHealthService = catalogHealthService;
         this.selfMonitoring = selfMonitoring;
+        this.signalsService = signalsService;
     }
 
     @GetMapping("/overview")
@@ -46,6 +50,19 @@ public class ConsoleApiController {
     @GetMapping("/services")
     public CatalogHealthService.CatalogView services() {
         return catalogHealthService.current();
+    }
+
+    @GetMapping("/overview/trend")
+    public ConsoleIncidentQueryService.IncidentTrend trend(
+            @RequestParam(defaultValue = "14") @Min(7) @Max(30) int days) {
+        return queryService.trend(days);
+    }
+
+    @GetMapping("/services/{id}/signals")
+    public ServiceSignalsService.SignalsView signals(@PathVariable @Pattern(regexp = SERVICE) String id,
+            @RequestParam(defaultValue = "1h") @Pattern(regexp = SignalRange.PATTERN) String range) {
+        return signalsService.signals(id, SignalRange.fromCode(range))
+                .orElseThrow(() -> new ConsoleResourceNotFoundException("service signals"));
     }
 
     @GetMapping("/pipeline-health")

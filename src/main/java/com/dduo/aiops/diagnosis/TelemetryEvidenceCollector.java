@@ -27,6 +27,7 @@ public class TelemetryEvidenceCollector {
 
     static final int MAX_RESPONSE_BYTES = 128 * 1024;
     static final int MAX_TRACES = 50;
+    static final int MAX_SERIES_POINTS = 120;
 
     private final ObjectMapper objectMapper;
     private final HttpClient httpClient;
@@ -58,7 +59,7 @@ public class TelemetryEvidenceCollector {
             var maximum = maximumSample(response.path("data").path("result"));
             var matched = maximum.sampleCount() > 0 && maximum.value() >= rule.metricThreshold();
             var rawData = json(Map.of("sampleCount", maximum.sampleCount(), "maximum", maximum.value(),
-                    "threshold", rule.metricThreshold()));
+                    "threshold", rule.metricThreshold(), "series", envelope(response.path("data").path("result"))));
             var evidence = new DiagnosisRepository.EvidenceDraft("METRIC", "prometheus", window.start(), window.end(), request,
                     "固定 PromQL（" + rule.metricDescription() + "）最大值 " + maximum.value() + "，阈值 " + rule.metricThreshold(),
                     rawData, BigDecimal.valueOf(30), matched);
@@ -172,6 +173,39 @@ public class TelemetryEvidenceCollector {
             }
         }
         return new Maximum(maximum, count);
+    }
+
+    /**
+     * Collapses all result series into one upper envelope (max per timestamp) capped at {@link #MAX_SERIES_POINTS}.
+     * Thresholds compare against the maximum, so the envelope is the curve that justifies the evidence verdict.
+     * Labels are dropped: only {@code [epochSeconds, value]} pairs are persisted.
+     */
+    static List<double[]> envelope(JsonNode results) {
+        var byTime = new java.util.TreeMap<Long, Double>();
+        for (JsonNode series : results) {
+            for (JsonNode sample : series.path("values")) {
+                try {
+                    var value = Double.parseDouble(sample.path(1).asText());
+                    if (Double.isFinite(value)) {
+                        byTime.merge(sample.path(0).asLong(), value, Math::max);
+                    }
+                } catch (NumberFormatException ignored) {
+                    // Invalid and non-finite samples are not evidence.
+                }
+            }
+        }
+        var entries = new ArrayList<>(byTime.entrySet());
+        var stride = Math.max(1, (int) Math.ceil(entries.size() / (double) MAX_SERIES_POINTS));
+        var points = new ArrayList<double[]>();
+        for (var index = 0; index < entries.size(); index += stride) {
+            var bucketMax = Double.NEGATIVE_INFINITY;
+            var end = Math.min(entries.size(), index + stride);
+            for (var inner = index; inner < end; inner++) {
+                bucketMax = Math.max(bucketMax, entries.get(inner).getValue());
+            }
+            points.add(new double[] {entries.get(index).getKey(), bucketMax});
+        }
+        return points;
     }
 
     private static int logLineCount(JsonNode results) {

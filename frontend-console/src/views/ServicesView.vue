@@ -1,28 +1,125 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
 import AppShell from '../components/AppShell.vue'
+import ExplainButton from '../components/ExplainButton.vue'
+import HintTerm from '../components/HintTerm.vue'
+import PageHeader from '../components/PageHeader.vue'
 import StatePanel from '../components/StatePanel.vue'
 import StatusBadge from '../components/StatusBadge.vue'
 import { consoleApi } from '../api/client'
-import type { CatalogView } from '../api/types'
+import type { CatalogView, ProbeView, ServiceView } from '../api/types'
+import { isUnauthorized } from '../utils/http'
+import { sampleCaption } from '../utils/sampleTime'
+import { formatLocal } from '../utils/time'
 
-const catalog = ref<CatalogView | null>(null); const failed = ref(false); const loading = ref(true)
-async function load() { loading.value = true; failed.value = false; try { catalog.value = (await consoleApi.services()).data } catch { failed.value = true } finally { loading.value = false } }
+const catalog = ref<CatalogView | null>(null)
+const failed = ref(false)
+const loading = ref(true)
+
+function applicationSample(service: ServiceView) {
+  return sampleCaption(service.sampledAt, service.freshness, service.reason)
+}
+
+function probeSample(probe: ProbeView) {
+  return sampleCaption(probe.sampledAt, probe.freshness, probe.reason)
+}
+
+async function load() {
+  loading.value = true
+  failed.value = false
+  try {
+    catalog.value = (await consoleApi.services()).data
+  } catch (error) {
+    if (!isUnauthorized(error)) failed.value = true
+  } finally { loading.value = false }
+}
+
 onMounted(load)
 </script>
 
 <template>
   <AppShell section="services">
-    <header class="page-head"><h1 class="page-title" data-page-heading tabindex="-1">Services</h1></header>
+    <PageHeader title="Services" topic="page.services" />
     <StatePanel v-if="failed" kind="error" title="无法读取 Service Catalog" detail="控制面可能离线，已加载的前端不会把 UNKNOWN 误报为 DOWN。" action="重新检查" @action="load"/>
     <div v-else-if="loading" class="catalog-skeleton"><span class="skeleton"/><span class="skeleton"/></div>
     <StatePanel v-else-if="!catalog?.services.length" title="Service Catalog 为空" detail="尚未发现可展示的服务配置。"/>
-    <section v-else class="catalog" aria-label="服务目录"><article v-for="service in catalog.services" :key="service.id" class="service"><header><div><h2>{{ service.displayName }}</h2><p class="mono">{{ service.otelServiceName }}</p></div><StatusBadge :value="service.status"/></header><dl><div><dt>Environment</dt><dd>{{ service.environment }}</dd></div><div><dt>Diagnosis profile</dt><dd class="mono">{{ service.diagnosisProfile }}</dd></div><div><dt>Application</dt><dd><StatusBadge :value="service.applicationStatus"/></dd></div></dl><div class="probes"><div v-for="probe in service.dependencies" :key="probe.id"><span>{{ probe.id }}</span><small>{{ probe.kind }}</small><StatusBadge :value="probe.status"/></div></div><a v-if="service.grafanaUrl" :href="service.grafanaUrl" target="_blank" rel="noreferrer">在 Grafana 深入查看<span aria-hidden="true"> →</span></a></article></section>
+    <section v-else class="catalog" aria-label="服务目录">
+      <p v-if="catalog.queriedAt" class="query-time mono">
+        <HintTerm topic="term.queried-at">查询时间</HintTerm> {{ formatLocal(catalog.queriedAt) }}
+      </p>
+      <article v-for="service in catalog.services" :key="service.id" class="service">
+        <header>
+          <div>
+            <h2>{{ service.displayName }}</h2>
+            <p>{{ service.environment }}</p>
+          </div>
+          <div class="status-block">
+            <span class="meta-label"><HintTerm topic="term.overall-status">Status</HintTerm></span>
+            <StatusBadge domain="service" :value="service.status" />
+          </div>
+        </header>
+        <dl>
+          <div>
+            <dt><HintTerm topic="term.application-status">Application</HintTerm></dt>
+            <dd><StatusBadge domain="service" :value="service.applicationStatus" /></dd>
+          </div>
+          <div>
+            <dt><HintTerm topic="term.sampled-at">应用采样时间</HintTerm></dt>
+            <dd class="mono" :data-kind="applicationSample(service).kind">{{ applicationSample(service).text }}</dd>
+          </div>
+        </dl>
+        <details v-if="service.dependencies.length" class="more">
+          <summary>查看依赖</summary>
+          <div class="probes">
+            <div v-for="probe in service.dependencies" :key="probe.id">
+              <span>{{ probe.id }}</span>
+              <small>{{ probe.kind }}</small>
+              <StatusBadge domain="service" :value="probe.status" />
+              <time class="mono" :data-kind="probeSample(probe).kind">{{ probeSample(probe).text }}</time>
+            </div>
+          </div>
+        </details>
+        <details class="more">
+          <summary>技术信息</summary>
+          <dl>
+            <div><dt>ID</dt><dd class="mono">{{ service.id }}</dd></div>
+            <div><dt>OTel service</dt><dd class="mono">{{ service.otelServiceName }}</dd></div>
+            <div><dt>Diagnosis profile</dt><dd class="mono">{{ service.diagnosisProfile }}</dd></div>
+            <div v-if="service.queriedAt"><dt>查询时间</dt><dd class="mono">{{ formatLocal(service.queriedAt) }}</dd></div>
+          </dl>
+        </details>
+        <p v-if="service.grafanaUrl" class="grafana">
+          <a :href="service.grafanaUrl" target="_blank" rel="noreferrer">在 Grafana 深入查看<span aria-hidden="true"> →</span></a>
+          <ExplainButton topic="term.grafana" name="查看 Grafana 链接的含义" />
+        </p>
+      </article>
+    </section>
   </AppShell>
 </template>
 
 <style scoped>
-.page-head { margin-bottom: 34px; }.catalog { border-top: 1px solid var(--line); }.service { display: grid; grid-template-columns: minmax(200px, .8fr) minmax(260px, 1.15fr) minmax(240px, 1fr); gap: 30px; border-bottom: 1px solid var(--line); padding: 24px 0; }.service header { display: flex; justify-content: space-between; gap: 14px; }.service h2 { margin: 0; font-size: 18px; letter-spacing: -.02em; }.service header p { margin: 6px 0 0; color: var(--text-muted); font-size: 12px; }.service dl { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin: 0; }.service dt { color: var(--text-faint); font: 600 12px var(--font-mono); letter-spacing: .06em; text-transform: uppercase; }.service dd { margin: 7px 0 0; color: var(--text-soft); font-size: 12px; overflow-wrap: anywhere; }.probes { display: grid; align-content: start; }.probes > div { display: grid; grid-template-columns: minmax(0, 1fr) 70px auto; gap: 12px; align-items: center; border-bottom: 1px solid var(--line-soft); padding: 8px 0; font-size: 12px; }.probes > div:last-child { border-bottom: 0; }.probes small { color: var(--text-muted); font-size: 12px; }.service > a { display: inline-flex; min-height: 44px; align-items: center; align-self: end; grid-column: 1 / -1; width: fit-content; color: var(--accent-strong); font-size: 12px; }.service > a span { margin-left: 5px; }.catalog-skeleton { display: grid; gap: 1px; border-top: 1px solid var(--line); }.catalog-skeleton span { height: 250px; border-radius: 0; }
-@media (max-width: 1050px) { .service { grid-template-columns: 1fr 1fr; }.probes { grid-column: 1 / -1; }.service > a { grid-column: 1 / -1; } }
-@media (max-width: 640px) { .page-head { margin-bottom: 26px; }.service { grid-template-columns: 1fr; gap: 20px; padding: 21px 0; }.service dl { grid-template-columns: 1fr; gap: 10px; }.probes { grid-column: auto; }.service > a { grid-column: auto; } }
+.catalog { border-top: 1px solid var(--line); }
+.query-time { display: flex; align-items: center; gap: 4px; margin: 12px 0 0; color: var(--text-muted); font-size: 13px; }
+.service { border-bottom: 1px solid var(--line); padding: 22px 0; }
+.service header { display: flex; justify-content: space-between; gap: 16px; align-items: start; }
+.service h2 { margin: 0; font-size: 18px; letter-spacing: -.02em; overflow-wrap: anywhere; }
+.service header p { margin: 6px 0 0; color: var(--text-muted); }
+.status-block { display: grid; justify-items: end; gap: 4px; }
+.service dl { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 20px; margin: 16px 0 0; }
+dt { color: var(--text-muted); font-size: 12px; font-weight: 600; }
+dd { margin: 6px 0 0; overflow-wrap: anywhere; }
+.more { margin-top: 12px; }
+.more summary { min-height: 44px; cursor: pointer; color: var(--accent-strong); font-size: 13px; font-weight: 600; }
+.probes { display: grid; }
+.probes > div { display: grid; grid-template-columns: minmax(0, 1fr) auto auto auto; gap: 8px 12px; align-items: center; border-top: 1px solid var(--line-soft); padding: 8px 0; font-size: 13px; }
+.probes small, .probes time { color: var(--text-muted); }
+dd[data-kind="stale"], time[data-kind="stale"] { color: var(--warning); }
+.grafana { display: flex; align-items: center; gap: 4px; margin: 8px 0 0; }
+.grafana a { display: inline-flex; min-height: 44px; align-items: center; color: var(--accent-strong); font-size: 13px; }
+.catalog-skeleton { display: grid; gap: 1px; border-top: 1px solid var(--line); }
+.catalog-skeleton span { height: 160px; border-radius: 0; }
+@media (max-width: 640px) {
+  .service dl, .probes > div { grid-template-columns: 1fr; }
+  .status-block { justify-items: start; }
+}
 </style>

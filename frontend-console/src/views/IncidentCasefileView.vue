@@ -1,67 +1,315 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import AppShell from '../components/AppShell.vue'
-import EvidencePlot from '../components/EvidencePlot.vue'
+import DisclosureSection from '../components/DisclosureSection.vue'
+import HintTerm from '../components/HintTerm.vue'
+import PageHeader from '../components/PageHeader.vue'
 import StatePanel from '../components/StatePanel.vue'
 import StatusBadge from '../components/StatusBadge.vue'
 import { consoleApi } from '../api/client'
-import type { AiAttempt, Evidence, IncidentDetail, ReportView, TimelineEntry } from '../api/types'
+import type { AiAttempt, Evidence, EvidenceType, IncidentDetail, ReportView, TimelineEntry } from '../api/types'
+import { useIncidentsListStore } from '../stores/incidentsList'
+import { isNotFound, isUnauthorized } from '../utils/http'
+import { isConfirmedRootCause, isEvidenceTimelineEntry, reportLimitTitle } from '../utils/sampleTime'
+import { formatDuration, formatLocal, timeZoneName } from '../utils/time'
 
-const route = useRoute(), id = String(route.params.id)
-const incident = ref<IncidentDetail | null>(null), evidence = ref<Evidence[]>([]), timeline = ref<TimelineEntry[]>([]), report = ref<ReportView | null>(null), ai = ref<AiAttempt[]>([]), loading = ref(true), failed = ref(false), selected = ref(''), tab = ref<'ALL' | 'METRIC' | 'LOG' | 'TRACE'>('ALL'), aiOpen = ref(false)
-const compactFacts = ref(false)
-const compactFactsMedia = window.matchMedia('(max-width: 600px)')
-const visibleEvidence = computed(() => tab.value === 'ALL' ? evidence.value : evidence.value.filter(item => item.type === tab.value))
-const selectedEvidence = computed(() => visibleEvidence.value.find(item => item.id === selected.value) || visibleEvidence.value[0])
-const evidenceTypes = computed(() => new Set(evidence.value.map(item => item.type)))
-const duration = computed(() => { if (!incident.value) return '—'; const end = incident.value.resolvedAt || incident.value.updatedAt; const seconds = Math.max(0, (new Date(end).getTime() - new Date(incident.value.startedAt).getTime()) / 1000); return seconds < 3600 ? `${Math.round(seconds / 60)}m` : `${(seconds / 3600).toFixed(1)}h` })
-const format = (value: string | null | undefined) => value ? new Intl.DateTimeFormat('zh-CN', { month: 'short', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false, timeZone: 'UTC' }).format(new Date(value)) + ' UTC' : '—'
-async function load() { loading.value = true; failed.value = false; try { const [detail, loadedEvidence, loadedTimeline, loadedAi] = await Promise.all([consoleApi.incident(id), consoleApi.evidence(id), consoleApi.timeline(id), consoleApi.aiAttempts(id)]); incident.value = detail.data; evidence.value = loadedEvidence.data; timeline.value = loadedTimeline.data; ai.value = loadedAi.data; selected.value = loadedEvidence.data[0]?.id || ''; try { report.value = (await consoleApi.report(id)).data } catch { report.value = null } } catch { failed.value = true } finally { loading.value = false } }
-function selectTimeline(entry: TimelineEntry) { const item = evidence.value.find(candidate => candidate.id === entry.evidenceId); if (item) { tab.value = item.type === 'METRIC' || item.type === 'LOG' || item.type === 'TRACE' ? item.type : 'ALL'; selected.value = item.id } }
-function selectTab(value: 'ALL' | 'METRIC' | 'LOG' | 'TRACE') { tab.value = value; selected.value = (value === 'ALL' ? evidence.value : evidence.value.filter(item => item.type === value))[0]?.id || '' }
-function updateCompactFacts() { compactFacts.value = compactFactsMedia.matches }
-onMounted(() => { updateCompactFacts(); compactFactsMedia.addEventListener('change', updateCompactFacts); void load() })
-onBeforeUnmount(() => compactFactsMedia.removeEventListener('change', updateCompactFacts))
+const route = useRoute()
+const list = useIncidentsListStore()
+const id = String(route.params.id)
+const incident = ref<IncidentDetail | null>(null)
+const evidence = ref<Evidence[]>([])
+const timeline = ref<TimelineEntry[]>([])
+const report = ref<ReportView | null>(null)
+const ai = ref<AiAttempt[]>([])
+const loading = ref(true)
+const failed = ref(false)
+const evidenceError = ref(false)
+const timelineError = ref(false)
+const aiError = ref(false)
+const reportState = ref<'loading' | 'ready' | 'missing' | 'error'>('loading')
+const readAt = ref<Date | null>(null)
+const evidenceSection = ref<{ expand: () => void } | null>(null)
+const selected = ref('')
+const tab = ref<'ALL' | 'METRIC' | 'LOG' | 'TRACE'>('ALL')
+const techOpen = ref(false)
+
+const visibleEvidence = computed(() => tab.value === 'ALL' ? evidence.value : evidence.value.filter((item) => item.type === tab.value))
+const selectedEvidence = computed(() => visibleEvidence.value.find((item) => item.id === selected.value) || visibleEvidence.value[0])
+const supportedFinding = computed(() => isConfirmedRootCause(report.value))
+const unconfirmedCandidates = computed(() => supportedFinding.value ? [] : (report.value?.candidates || []))
+const duration = computed(() => {
+  if (!incident.value) return '—'
+  if (incident.value.resolvedAt) return formatDuration(incident.value.startedAt, incident.value.resolvedAt)
+  if (!readAt.value) return '—'
+  return `${formatDuration(incident.value.startedAt, readAt.value.toISOString())}（截至本次读取）`
+})
+
+function evidencePresence(type: EvidenceType) {
+  return evidence.value.some((item) => item.type === type) ? 'Available' : 'Missing'
+}
+
+function isEvidenceEntry(entry: TimelineEntry) {
+  return isEvidenceTimelineEntry(entry)
+}
+
+function selectTab(value: typeof tab.value) {
+  tab.value = value
+  selected.value = (value === 'ALL' ? evidence.value : evidence.value.filter((item) => item.type === value))[0]?.id || ''
+}
+
+function selectTimeline(entry: TimelineEntry) {
+  if (!isEvidenceEntry(entry)) return
+  const item = evidence.value.find((candidate) => candidate.id === entry.evidenceId)
+  if (!item) return
+  evidenceSection.value?.expand()
+  tab.value = item.type === 'METRIC' || item.type === 'LOG' || item.type === 'TRACE' ? item.type : 'ALL'
+  selected.value = item.id
+}
+
+async function load() {
+  loading.value = true
+  failed.value = false
+  evidenceError.value = false
+  timelineError.value = false
+  aiError.value = false
+  reportState.value = 'loading'
+  report.value = null
+  try {
+    incident.value = (await consoleApi.incident(id)).data
+  } catch (error) {
+    if (!isUnauthorized(error)) failed.value = true
+    loading.value = false
+    return
+  }
+  await Promise.all([
+    consoleApi.evidence(id).then((result) => {
+      evidence.value = result.data
+      selected.value = result.data[0]?.id || ''
+    }).catch((error) => { if (!isUnauthorized(error)) evidenceError.value = true }),
+    consoleApi.timeline(id).then((result) => { timeline.value = result.data })
+      .catch((error) => { if (!isUnauthorized(error)) timelineError.value = true }),
+    consoleApi.aiAttempts(id).then((result) => { ai.value = result.data })
+      .catch((error) => { if (!isUnauthorized(error)) aiError.value = true }),
+    consoleApi.report(id).then((result) => {
+      report.value = result.data
+      reportState.value = 'ready'
+    }).catch((error) => {
+      if (isUnauthorized(error)) return
+      reportState.value = isNotFound(error) ? 'missing' : 'error'
+    }),
+  ])
+  readAt.value = new Date()
+  loading.value = false
+}
+
+onMounted(load)
 </script>
 
 <template>
-  <AppShell section="incidents">
-    <nav class="crumb mono" aria-label="Breadcrumb"><RouterLink :to="{ name: 'incidents' }">Incidents</RouterLink><span aria-hidden="true">/</span><span>{{ id }}</span></nav>
-    <header class="case-title"><h1 class="page-title" data-page-heading tabindex="-1">Incident Casefile</h1></header>
+  <AppShell section="incidents" width="casefile">
+    <nav class="crumb mono" aria-label="Breadcrumb">
+      <RouterLink :to="{ name: 'incidents', query: list.query }">Incidents</RouterLink>
+      <span aria-hidden="true">/</span>
+      <span>Casefile</span>
+    </nav>
+    <PageHeader title="Incident Casefile" topic="page.casefile" />
     <StatePanel v-if="failed" kind="error" title="无法打开 Incident 案卷" detail="API 离线、Session 过期或资源不存在。没有证据时不会生成推断。" action="重试" @action="load"/>
     <div v-else-if="loading" class="case-skeleton" aria-label="正在读取 Incident 案卷"><span class="skeleton"/><span class="skeleton"/><span class="skeleton"/></div>
     <template v-else-if="incident">
-      <section class="case-head" aria-label="Incident 摘要"><div><span class="meta-label">Incident ID</span><strong class="mono">{{ incident.id }}</strong></div><div><span class="meta-label">Service</span><strong class="mono">{{ incident.primaryService }}</strong></div><div><span class="meta-label">Status</span><StatusBadge :value="incident.status"/></div><div><span class="meta-label">First seen</span><strong class="mono">{{ format(incident.startedAt) }}</strong></div><div><span class="meta-label">Duration</span><strong class="mono">{{ duration }}</strong></div><div class="finding"><span class="meta-label">Deterministic finding</span><strong>{{ report?.rootCause || '证据尚不足，未形成受支持结论' }}</strong></div></section>
-      <div class="case-grid">
-        <aside class="timeline" aria-label="Incident 叙事时间线"><div class="rail-title"><h2 class="section-title">Timeline</h2></div><StatePanel v-if="!timeline.length" title="暂无时间线事件"/><div v-else class="timeline-list"><button v-for="(entry, index) in timeline" :key="entry.evidenceId + entry.type" type="button" :class="{ active: entry.evidenceId === selected }" :aria-pressed="entry.evidenceId === selected" @click="selectTimeline(entry)"><i aria-hidden="true">{{ index + 1 }}</i><span><strong>{{ entry.type.replaceAll('_', ' ') }}</strong><time class="mono">{{ format(entry.occurredAt) }}</time><small>{{ entry.summary }}</small></span></button></div></aside>
-        <section class="inspection panel" aria-labelledby="inspection-title"><header><div><h2 id="inspection-title" class="section-title">{{ selectedEvidence?.type || 'Evidence inspection' }}</h2></div><time class="mono">{{ format(selectedEvidence?.collectedAt) }}</time></header><template v-if="evidence.length"><EvidencePlot :items="visibleEvidence" :selected="selected" @select="selected = $event"/><nav class="tabs" aria-label="证据类型"><button v-for="value in ['ALL', 'METRIC', 'LOG', 'TRACE'] as const" :key="value" type="button" :class="{ active: tab === value }" :aria-pressed="tab === value" @click="selectTab(value)">{{ value }}</button></nav><Transition name="evidence" mode="out-in"><article v-if="selectedEvidence" :key="selectedEvidence.id" class="evidence-detail"><div class="evidence-meta"><span class="mono">{{ selectedEvidence.source }}</span><span class="mono">{{ selectedEvidence.serviceName }}</span></div><p>{{ selectedEvidence.summary }}</p><div class="window mono">{{ format(selectedEvidence.startTime) }} → {{ format(selectedEvidence.endTime) }}</div></article><StatePanel v-else key="empty" title="当前类型没有证据" detail="缺失证据会降低完整性，不会被模拟数据填补。"/></Transition><footer v-if="timeline.length" class="causal"><span>因果关联</span><i aria-hidden="true"/><b v-for="(entry, index) in timeline.slice(0, 8)" :key="entry.evidenceId + index" :class="{ active: entry.evidenceId === selected }">{{ index + 1 }}</b></footer></template><StatePanel v-else title="当前 Incident 没有证据" detail="确定性报告将保持等待或弃权状态。"/></section>
-        <aside class="facts" aria-label="证据完整度与审计">
-          <details class="fact-disclosure" open>
-            <summary><h2 class="section-title">Evidence completeness</h2><span aria-hidden="true"/></summary>
-            <div class="fact-content"><p v-for="type in ['METRIC', 'LOG', 'TRACE']" :key="type"><span>{{ type }}</span><b :class="evidenceTypes.has(type as Evidence['type']) ? 'ok' : 'missing'">{{ evidenceTypes.has(type as Evidence['type']) ? 'Complete' : 'Missing' }}</b></p><p><span>Deterministic report</span><b :class="report ? 'ok' : 'partial'">{{ report ? 'Available' : 'Pending' }}</b></p></div>
-          </details>
-          <details class="fact-disclosure" :open="!compactFacts">
-            <summary><h2 class="section-title">Limitations</h2><span aria-hidden="true"/></summary>
-            <div class="fact-content"><ul><li v-if="!report">尚未形成受支持报告</li><li v-if="!evidenceTypes.has('TRACE')">Trace 证据缺失</li><li>仅展示脱敏摘要，不公开 raw payload</li></ul></div>
-          </details>
-          <details class="fact-disclosure" :open="!compactFacts">
-            <summary><h2 class="section-title">Run audit</h2><span aria-hidden="true"/></summary>
-            <div class="fact-content"><p><span>Attempt</span><b class="mono">{{ incident.attempt ?? '—' }}</b></p><p><span>Run status</span><b>{{ incident.diagnosisRunStatus ?? '—' }}</b></p><p><span>Support score</span><b class="mono">{{ report?.supportScore?.toFixed(1) ?? '—' }}</b></p></div>
-          </details>
-          <section class="ai"><button type="button" aria-controls="ai-advisory-content" :aria-expanded="aiOpen" @click="aiOpen = !aiOpen"><span><strong>AI advisory</strong><small>低于确定性报告</small></span><b>{{ aiOpen ? '收起' : '展开' }}</b></button><Transition name="disclosure"><div v-if="aiOpen" id="ai-advisory-content" class="ai-content"><p v-if="!ai.length">没有 AI 尝试记录。</p><p v-for="attempt in ai" :key="attempt.id"><StatusBadge :value="attempt.status"/><span class="mono">{{ attempt.modelName || attempt.failureCode || 'controlled fallback' }}</span></p></div></Transition></section>
-        </aside>
-      </div>
+      <DisclosureSection title="事件摘要" default-open>
+        <p class="lead">{{ incident.title }}</p>
+        <dl class="facts">
+          <div><dt>Service</dt><dd>{{ incident.primaryService }}</dd></div>
+          <div><dt>Environment</dt><dd>{{ incident.environment }}</dd></div>
+          <div>
+            <dt>Status</dt>
+            <dd><StatusBadge domain="incident" :value="incident.status" /></dd>
+          </div>
+          <div>
+            <dt>发生时间</dt>
+            <dd class="mono">{{ formatLocal(incident.startedAt) }}</dd>
+          </div>
+          <div v-if="incident.resolvedAt">
+            <dt>恢复时间</dt>
+            <dd class="mono">{{ formatLocal(incident.resolvedAt) }}</dd>
+          </div>
+          <div>
+            <dt>持续时间</dt>
+            <dd class="mono">{{ duration }}</dd>
+          </div>
+          <div>
+            <dt>Alert</dt>
+            <dd class="mono">{{ incident.alertName }}</dd>
+          </div>
+        </dl>
+        <p class="timezone">时间按浏览器时区显示（{{ timeZoneName() }}）</p>
+        <details class="tech" :open="techOpen" @toggle="techOpen = ($event.target as HTMLDetailsElement).open">
+          <summary>技术信息</summary>
+          <dl class="facts">
+            <div><dt>Incident ID</dt><dd class="mono">{{ incident.id }}</dd></div>
+            <div><dt>Severity</dt><dd><StatusBadge domain="severity" :value="incident.severity" /></dd></div>
+            <div><dt>Detected</dt><dd class="mono">{{ formatLocal(incident.detectedAt) }}</dd></div>
+            <div><dt>Last alert</dt><dd class="mono">{{ formatLocal(incident.lastAlertAt) }}</dd></div>
+            <div><dt>Updated</dt><dd class="mono">{{ formatLocal(incident.updatedAt) }}</dd></div>
+            <div v-if="incident.diagnosisRunId"><dt>Run ID</dt><dd class="mono">{{ incident.diagnosisRunId }}</dd></div>
+          </dl>
+        </details>
+      </DisclosureSection>
+
+      <DisclosureSection title="诊断结论" default-open topic="term.deterministic-report">
+        <template v-if="reportState === 'loading'">
+          <p class="muted">正在读取确定性报告…</p>
+        </template>
+        <StatePanel v-else-if="reportState === 'error'" kind="error" title="报告请求失败" detail="事件摘要仍然有效。此区域失败不会改写已读取的事件状态。" />
+        <StatePanel v-else-if="reportState === 'missing'" title="尚未生成确定性报告" detail="没有报告时不会把候选、错误提示或 AI 状态当成结论。" />
+        <template v-else-if="supportedFinding">
+          <p class="lead">{{ report?.rootCause }}</p>
+          <p v-if="report?.description" class="description">{{ report.description }}</p>
+          <dl class="facts">
+            <div><dt>Verification</dt><dd><StatusBadge domain="report" :value="report?.verificationStatus || ''" /></dd></div>
+            <div>
+              <dt><HintTerm topic="term.support-score">Support score</HintTerm></dt>
+              <dd class="score">
+                <span class="mono">{{ report?.supportScore?.toFixed(1) ?? '—' }}</span>
+              </dd>
+            </div>
+            <div><dt>支持证据</dt><dd class="mono">{{ report?.supportingEvidence ?? 0 }}</dd></div>
+            <div><dt>反对证据</dt><dd class="mono">{{ report?.opposingEvidence ?? 0 }}</dd></div>
+          </dl>
+        </template>
+        <template v-else>
+          <StatePanel :title="reportLimitTitle(report)" :detail="report?.dispositionReason || (report?.verificationStatus ? `当前验证状态为 ${report.verificationStatus}。弱支持、证据不足或被否定都不能当作结论。` : '主要根因为空。空字段不会被编造成恢复原因或弃权原因。')" />
+          <p v-if="report?.description" class="description">{{ report.description }}</p>
+          <ul v-if="report?.limitations?.length" class="limits">
+            <li v-for="item in report.limitations" :key="item">{{ item }}</li>
+          </ul>
+          <div v-if="unconfirmedCandidates.length" class="candidates">
+            <h3>未确认候选</h3>
+            <p class="muted">这些候选不能当作已确认根因。</p>
+            <ul>
+              <li v-for="item in unconfirmedCandidates" :key="item.id">
+                <strong>{{ item.name }}</strong>
+                <StatusBadge domain="report" :value="item.verificationStatus || ''" />
+                <span class="mono">{{ item.supportScore?.toFixed(1) ?? '—' }}</span>
+              </li>
+            </ul>
+          </div>
+        </template>
+        <p class="limit">仅展示脱敏摘要，不公开 raw payload。</p>
+      </DisclosureSection>
+
+      <DisclosureSection ref="evidenceSection" title="Evidence" topic="term.evidence" :summary="evidenceError ? '读取失败' : `${evidence.length} 条已读取`">
+        <StatePanel v-if="evidenceError" kind="error" title="证据读取失败" detail="已保留事件摘要。缺失证据不会用模拟数据填补。" />
+        <template v-else>
+          <p class="presence">
+            <span v-for="type in ['METRIC', 'LOG', 'TRACE'] as const" :key="type">
+              {{ type }}
+              <b :data-state="evidencePresence(type)">{{ evidencePresence(type) }}</b>
+            </span>
+          </p>
+          <nav v-if="evidence.length" class="tabs" aria-label="证据类型">
+            <button v-for="value in ['ALL', 'METRIC', 'LOG', 'TRACE'] as const" :key="value" type="button" :class="{ active: tab === value }" :aria-pressed="tab === value" @click="selectTab(value)">{{ value }}</button>
+          </nav>
+          <StatePanel v-if="!evidence.length" title="当前 Incident 没有证据" detail="确定性报告将保持等待或弃权状态。" />
+          <StatePanel v-else-if="!visibleEvidence.length" title="当前类型没有证据" detail="Missing 表示本次返回中未见该类证据。" />
+          <ul v-else class="evidence-list">
+            <li v-for="item in visibleEvidence" :key="item.id">
+              <button type="button" :class="{ active: item.id === selectedEvidence?.id }" :aria-pressed="item.id === selectedEvidence?.id" @click="selected = item.id">
+                <strong>{{ item.type }}</strong>
+                <span class="mono">{{ item.source }} · {{ item.serviceName }}</span>
+                <time class="mono">采集 {{ formatLocal(item.collectedAt) }}</time>
+                <small>范围 {{ formatLocal(item.startTime) }} → {{ formatLocal(item.endTime) }}</small>
+                <p>{{ item.summary }}</p>
+              </button>
+            </li>
+          </ul>
+        </template>
+      </DisclosureSection>
+
+      <DisclosureSection title="Timeline" topic="term.timeline" :summary="timelineError ? '读取失败' : `${timeline.length} 条记录`">
+        <StatePanel v-if="timelineError" kind="error" title="时间线读取失败" detail="已保留事件摘要。" />
+        <StatePanel v-else-if="!timeline.length" title="暂无时间线事件" />
+        <ol v-else class="timeline">
+          <li v-for="entry in timeline" :key="entry.type + entry.evidenceId + entry.occurredAt">
+            <button v-if="isEvidenceEntry(entry)" type="button" :class="{ active: entry.evidenceId === selected }" @click="selectTimeline(entry)">
+              <strong>{{ entry.type.replaceAll('_', ' ') }}</strong>
+              <time class="mono">{{ formatLocal(entry.occurredAt) }}</time>
+              <small>{{ entry.summary }}</small>
+            </button>
+            <div v-else class="moment">
+              <strong>{{ entry.type.replaceAll('_', ' ') }}</strong>
+              <time class="mono">{{ formatLocal(entry.occurredAt) }}</time>
+              <small>{{ entry.summary }}</small>
+            </div>
+          </li>
+        </ol>
+      </DisclosureSection>
+
+      <DisclosureSection title="Run details 与 AI advisory" topic="term.diagnosis-run" :summary="incident.diagnosisRunStatus || '无任务记录'">
+        <dl class="facts">
+          <div>
+            <dt>Run status</dt>
+            <dd><StatusBadge v-if="incident.diagnosisRunStatus" domain="run" :value="incident.diagnosisRunStatus" /><span v-else>—</span></dd>
+          </div>
+          <div><dt>Attempt</dt><dd class="mono">{{ incident.attempt ?? '—' }}</dd></div>
+          <div><dt>Failure code</dt><dd class="mono">{{ incident.failureCode ?? '—' }}</dd></div>
+          <div><dt>Run started</dt><dd class="mono">{{ formatLocal(incident.diagnosisStartedAt) }}</dd></div>
+          <div><dt>Run finished</dt><dd class="mono">{{ formatLocal(incident.diagnosisFinishedAt) }}</dd></div>
+        </dl>
+        <h3>AI advisory</h3>
+        <p class="limit">AI 为辅助信息，不能覆盖确定性报告。现有接口没有建议正文时不会补造。</p>
+        <StatePanel v-if="aiError" kind="error" title="AI 尝试记录读取失败" detail="不影响已展示的事件摘要和确定性结论。" />
+        <p v-else-if="!ai.length">没有 AI 尝试记录。</p>
+        <ul v-else class="ai-list">
+          <li v-for="attempt in ai" :key="attempt.id">
+            <StatusBadge domain="ai" :value="attempt.status" />
+            <span class="mono">{{ attempt.modelName || attempt.failureCode || 'controlled fallback' }}</span>
+            <time class="mono">{{ formatLocal(attempt.createdAt) }}</time>
+          </li>
+        </ul>
+      </DisclosureSection>
     </template>
   </AppShell>
 </template>
 
 <style scoped>
-.crumb { display: flex; gap: 10px; margin-bottom: 18px; color: var(--text-faint); font-size: 12px; }.crumb a { color: var(--text-muted); }.case-title { margin-bottom: 30px; }.case-head { display: grid; grid-template-columns: 1.1fr .92fr .76fr 1.15fr .64fr minmax(240px, 2fr); border-block: 1px solid var(--line); }.case-head > div { display: grid; align-content: start; gap: 8px; min-height: 92px; border-right: 1px solid var(--line-soft); padding: 15px 16px; }.case-head > div:first-child { padding-left: 0; }.case-head > div:last-child { border-right: 0; }.case-head strong { overflow-wrap: anywhere; font-size: 12px; line-height: 1.5; }.case-head small { color: var(--text-muted); font-size: 12px; }.finding strong { color: var(--text-soft); font-weight: 620; }.case-grid { display: grid; grid-template-columns: minmax(220px, 270px) minmax(440px, 1fr) minmax(218px, 250px); gap: 20px; align-items: start; margin-top: 24px; }.rail-title { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 12px; }.rail-title span { color: var(--text-faint); font: 12px var(--font-mono); }.timeline-list { position: relative; }.timeline-list::before { content: ""; position: absolute; top: 22px; bottom: 22px; left: 13px; width: 1px; background: var(--line); }.timeline button { position: relative; display: grid; width: 100%; grid-template-columns: 28px minmax(0, 1fr); gap: 10px; border: 1px solid transparent; border-radius: var(--radius-sm); background: transparent; padding: 10px 8px; color: var(--text); text-align: left; cursor: pointer; transition: background var(--duration-fast) var(--ease), border-color var(--duration-fast) var(--ease); }.timeline button:hover { background: var(--surface-1); }.timeline button.active { border-color: oklch(0.54 .1 288 / .58); background: var(--accent-wash); }.timeline i { z-index: 1; display: grid; width: 27px; height: 27px; place-items: center; border: 1px solid var(--line); border-radius: 50%; background: var(--bg); color: var(--text-muted); font: 12px var(--font-mono); font-style: normal; }.timeline button.active i { border-color: var(--accent); color: var(--accent-strong); }.timeline strong, .timeline time, .timeline small { display: block; }.timeline strong { font-size: 12px; }.timeline time { margin-top: 3px; color: var(--text-faint); font-size: 12px; }.timeline small { margin-top: 5px; color: var(--text-muted); font-size: 12px; line-height: 1.45; }.inspection { overflow: hidden; }.inspection > header { display: flex; align-items: end; justify-content: space-between; gap: 16px; border-bottom: 1px solid var(--line-soft); padding: 19px 20px 16px; }.inspection > header p { margin: 5px 0 0; color: var(--text-muted); font-size: 12px; }.inspection > header time { color: var(--text-faint); font-size: 12px; text-align: right; }.inspection :deep(.plot) { margin: 0 20px; }.tabs { display: flex; gap: 18px; overflow-x: auto; border-bottom: 1px solid var(--line); padding: 0 20px; }.tabs button { display: inline-flex; min-height: 43px; align-items: center; gap: 6px; border: 0; border-bottom: 2px solid transparent; background: transparent; padding: 0 1px; color: var(--text-muted); font: 600 12px var(--font-mono); cursor: pointer; }.tabs button.active { border-color: var(--accent); color: var(--accent-strong); }.tabs span { color: var(--text-faint); }.evidence-detail { min-height: 244px; padding: 21px 20px; }.evidence-meta { display: flex; flex-wrap: wrap; gap: 8px 16px; color: var(--text-faint); font-size: 12px; }.evidence-detail h3 { margin: 26px 0 8px; font-size: 13px; }.evidence-detail p { max-width: 66ch; margin: 0; color: var(--text-soft); line-height: 1.75; white-space: pre-wrap; }.window { margin-top: 24px; color: var(--text-muted); font-size: 12px; }.causal { display: flex; align-items: center; gap: 8px; border-top: 1px solid var(--line); padding: 12px 20px; color: var(--text-muted); font-size: 12px; }.causal i { width: 18px; height: 1px; background: var(--line); }.causal b { display: grid; width: 20px; height: 20px; place-items: center; border: 1px solid var(--line); border-radius: 50%; color: var(--text-faint); font: 12px var(--font-mono); }.causal b.active { border-color: var(--accent); background: var(--accent-wash); color: var(--accent-strong); }.causal small { margin-left: auto; color: var(--text-faint); font-size: 12px; }.facts { border-block: 1px solid var(--line); }.fact-disclosure, .facts .ai { border-bottom: 1px solid var(--line-soft); padding: 17px 0; }.fact-disclosure:last-of-type { border-bottom: 1px solid var(--line-soft); }.facts .ai { border-bottom: 0; }.fact-disclosure summary { display: block; cursor: default; list-style: none; }.fact-disclosure summary::-webkit-details-marker { display: none; }.fact-disclosure summary > span { display: none; }.facts h2 { margin: 0 0 13px; font-size: 13px; }.facts p { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin: 9px 0; color: var(--text-muted); font-size: 12px; }.facts p b { color: var(--text-soft); font-weight: 600; text-align: right; }.facts .ok { color: var(--success); }.facts .missing { color: var(--critical); }.facts .partial { color: var(--warning); }.facts ul { margin: 0; padding-left: 17px; color: var(--text-muted); font-size: 12px; line-height: 1.7; }.ai button { display: flex; width: 100%; align-items: center; justify-content: space-between; border: 0; background: transparent; padding: 0; color: var(--text); text-align: left; cursor: pointer; }.ai button strong { font-size: 13px; }.ai button small { display: block; margin-top: 4px; color: var(--text-muted); font-size: 12px; }.ai button > b { color: var(--accent-strong); font-size: 12px; font-weight: 600; }.ai-content { display: grid; gap: 10px; margin-top: 13px; }.ai-content p { display: grid; gap: 5px; margin: 0; }.ai-content span { color: var(--text-muted); font-size: 12px; }.case-skeleton { display: grid; grid-template-columns: 1fr 2.5fr 1fr; gap: 20px; }.case-skeleton span { height: 570px; }.evidence-enter-active, .evidence-leave-active, .disclosure-enter-active, .disclosure-leave-active { transition: opacity var(--duration-base) var(--ease), transform var(--duration-base) var(--ease); }.evidence-enter-from, .evidence-leave-to { opacity: 0; transform: translateY(4px); }.disclosure-enter-from, .disclosure-leave-to { opacity: 0; transform: translateY(-4px); }
-.tabs button, .ai button { min-height: 44px; }
-@media (max-width: 1250px) { .case-head { grid-template-columns: repeat(3, 1fr); }.case-head > div { border-bottom: 1px solid var(--line-soft); }.case-head > div:nth-child(3n) { border-right: 0; }.case-head .finding { grid-column: 1 / -1; border-bottom: 0; }.case-grid { grid-template-columns: minmax(230px, .7fr) minmax(450px, 1.5fr); }.facts { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(4, 1fr); gap: 18px; }.facts section { border-bottom: 0; border-right: 1px solid var(--line-soft); }.facts section:last-child { border-right: 0; } }
-@media (max-width: 900px) { .case-grid { grid-template-columns: 1fr; }.timeline-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }.timeline-list::before { display: none; }.inspection { order: 2; }.facts { order: 3; }.case-skeleton { grid-template-columns: 1fr; }.case-skeleton span { height: 150px; } }
-@media (max-width: 600px) { .case-title { margin-bottom: 24px; }.case-head { grid-template-columns: repeat(2, 1fr); }.case-head > div { min-height: 84px; padding: 13px 10px; }.case-head > div:first-child { padding-left: 0; }.case-head > div:nth-child(odd) { border-right: 1px solid var(--line-soft); }.case-head > div:nth-child(even) { border-right: 0; }.case-head .finding { grid-column: 1 / -1; }.timeline-list { grid-template-columns: 1fr; }.timeline button { padding-inline: 0; }.inspection > header { padding-inline: 16px; }.inspection > header time { max-width: 110px; }.inspection :deep(.plot) { margin-inline: 16px; }.tabs { padding-inline: 16px; }.evidence-detail { min-height: 220px; padding-inline: 16px; }.causal { padding-inline: 16px; }.causal b:nth-of-type(n+5) { display: none; }.causal small { display: none; }.facts { display: block; }.facts section { border-right: 0; border-bottom: 1px solid var(--line-soft); }.facts section:last-child { border-bottom: 0; } }
-@media (max-width: 1250px) and (min-width: 601px) { .facts .fact-disclosure, .facts .ai { border-bottom: 0; border-right: 1px solid var(--line-soft); padding-right: 16px; }.facts .ai { border-right: 0; } }
-@media (max-width: 600px) { .facts .fact-disclosure, .facts .ai { border-right: 0; border-bottom: 1px solid var(--line-soft); padding: 15px 0; }.facts .ai { border-bottom: 0; }.fact-disclosure summary { display: flex; min-height: 44px; align-items: center; justify-content: space-between; cursor: pointer; }.fact-disclosure summary > span { display: inline; color: var(--accent-strong); font-size: 12px; }.fact-disclosure summary > span::before { content: "查看"; }.fact-disclosure[open] summary > span::before { content: "收起"; }.fact-disclosure summary h2 { margin: 0; }.fact-content { padding-top: 7px; } }
+.crumb { display: flex; gap: 10px; margin-bottom: 12px; color: var(--text-muted); font-size: 12px; }
+.crumb a { color: var(--text-soft); }
+.lead { margin: 0 0 16px; font-size: 16px; overflow-wrap: anywhere; }
+.description { max-width: 70ch; margin: 0 0 16px; color: var(--text-soft); white-space: pre-wrap; }
+.facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px 20px; margin: 0; }
+dt { color: var(--text-muted); font-size: 12px; font-weight: 600; }
+dd { margin: 6px 0 0; overflow-wrap: anywhere; }
+.score { display: flex; align-items: center; gap: 4px; }
+.timezone, .limit, .muted { margin: 14px 0 0; color: var(--text-muted); font-size: 13px; }
+.tech { margin-top: 16px; }
+.tech summary { min-height: 44px; cursor: pointer; color: var(--accent-strong); font-size: 13px; font-weight: 600; }
+.tech .facts { margin-top: 12px; }
+.presence { display: flex; flex-wrap: wrap; gap: 12px 18px; align-items: center; margin: 0 0 14px; color: var(--text-soft); font-size: 13px; }
+.presence b[data-state="Available"] { color: var(--success); font-weight: 650; }
+.presence b[data-state="Missing"] { color: var(--text-muted); font-weight: 650; }
+.tabs { display: flex; gap: 16px; overflow-x: auto; border-bottom: 1px solid var(--line); }
+.tabs button { display: inline-flex; min-height: 44px; align-items: center; border: 0; border-bottom: 2px solid transparent; background: transparent; padding: 0 2px; color: var(--text-muted); font: 600 12px var(--font-mono); cursor: pointer; }
+.tabs button.active { border-color: var(--accent); color: var(--accent-strong); }
+.evidence-list, .timeline, .ai-list { margin: 0; padding: 0; list-style: none; }
+.evidence-list button, .timeline button, .moment {
+  display: grid; width: 100%; gap: 4px; border: 1px solid transparent; border-radius: var(--radius-sm);
+  background: transparent; padding: 12px 8px; color: var(--text); text-align: left;
+}
+.evidence-list button { cursor: pointer; }
+.evidence-list button:hover, .timeline button:hover { background: var(--surface-1); }
+.evidence-list button.active, .timeline button.active { border-color: oklch(0.54 .1 288 / .58); background: var(--accent-wash); }
+.evidence-list p { max-width: 70ch; margin: 6px 0 0; color: var(--text-soft); white-space: pre-wrap; }
+.evidence-list small, .timeline time, .timeline small, .moment time, .moment small, .ai-list time { color: var(--text-muted); font-size: 12px; }
+h3 { margin: 22px 0 8px; font-size: 14px; }
+.limits { max-width: 70ch; margin: 12px 0 0; padding-left: 18px; color: var(--text-soft); }
+.candidates { margin-top: 16px; }
+.candidates ul { margin: 0; padding: 0; list-style: none; }
+.candidates li { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; border-top: 1px solid var(--line-soft); padding: 10px 0; }
+.candidates .muted { display: flex; align-items: center; gap: 4px; margin: 0 0 8px; }
+.ai-list li { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; border-top: 1px solid var(--line-soft); padding: 10px 0; }
+.case-skeleton { display: grid; gap: 12px; }
+.case-skeleton span { height: 88px; }
+@media (max-width: 640px) { .facts { grid-template-columns: 1fr; } }
 </style>

@@ -1,4 +1,6 @@
 export type HealthState = 'UP' | 'DOWN' | 'UNKNOWN'
+export type IncidentSeverity = 'INFO' | 'WARNING' | 'CRITICAL'
+export type EvidenceType = 'METRIC' | 'LOG' | 'TRACE' | 'TOPOLOGY' | 'RUNBOOK' | 'CHANGE_HISTORY'
 
 export interface SessionView {
   principal: string
@@ -21,7 +23,7 @@ export interface IncidentSummary {
   title: string
   primaryService: string
   alertName: string
-  severity: 'INFO' | 'WARNING' | 'CRITICAL'
+  severity: IncidentSeverity
   status: string
   startedAt: string
   lastAlertAt: string
@@ -32,9 +34,18 @@ export interface IncidentSummary {
 
 export interface IncidentPage { items: IncidentSummary[]; nextCursor: string | null; hasMore: boolean }
 
-export interface IncidentDetail extends IncidentSummary {
+export interface IncidentDetail {
+  id: string
+  title: string
+  primaryService: string
+  alertName: string
+  severity: IncidentSeverity
+  status: string
   environment: string
+  startedAt: string
   detectedAt: string
+  lastAlertAt: string
+  resolvedAt: string | null
   updatedAt: string
   diagnosisRunId: string | null
   diagnosisRunStatus: string | null
@@ -47,7 +58,7 @@ export interface IncidentDetail extends IncidentSummary {
 export interface Evidence {
   id: string
   diagnosisRunId: string
-  type: 'METRIC' | 'LOG' | 'TRACE' | 'TOPOLOGY' | 'RUNBOOK' | 'CHANGE_HISTORY'
+  type: EvidenceType
   source: string
   serviceName: string
   startTime: string
@@ -57,12 +68,103 @@ export interface Evidence {
   importance: number
 }
 
-export interface TimelineEntry { evidenceId: string; type: string; occurredAt: string; summary: string }
-export interface ReportView { id: string; generatedAt: string; rootCause: string | null; description: string | null; affectedService: string | null; supportScore: number | null; verificationStatus: string | null; supportingEvidence: number; opposingEvidence: number }
-export interface AiAttempt { id: string; sourceReportId: string; status: string; promptVersion: string; modelProvider: string | null; modelName: string | null; failureCode: string | null; createdAt: string; completedAt: string | null }
+export interface TimelineEntry {
+  evidenceId: string
+  type: string
+  occurredAt: string
+  summary: string
+  referenceKind?: 'ALERT_EVENT' | 'DIAGNOSIS_RUN' | 'EVIDENCE' | 'DIAGNOSIS_REPORT' | string
+  referenceId?: string
+}
+export interface ReportCandidateView {
+  id: string
+  rank: number
+  name: string
+  description: string | null
+  affectedService: string | null
+  supportScore: number | null
+  verificationStatus: string | null
+  supportingEvidence: number
+  opposingEvidence: number
+}
+export interface ReportView {
+  id: string
+  generatedAt: string
+  rootCause: string | null
+  description: string | null
+  affectedService: string | null
+  supportScore: number | null
+  verificationStatus: string | null
+  supportingEvidence: number
+  opposingEvidence: number
+  diagnosisRunId?: string | null
+  disposition?: string | null
+  dispositionReason?: string | null
+  limitations?: string[]
+  candidates?: ReportCandidateView[]
+}
+export interface AiAttempt {
+  id: string
+  sourceReportId: string
+  status: string
+  promptVersion: string
+  modelProvider: string | null
+  modelName: string | null
+  failureCode: string | null
+  createdAt: string
+  completedAt: string | null
+}
 
-export interface ProbeView { id: string; kind: string; status: HealthState; observedAt: string }
-export interface ServiceView { id: string; displayName: string; environment: string; otelServiceName: string; diagnosisProfile: string; grafanaUrl: string | null; status: HealthState; applicationStatus: HealthState; dependencies: ProbeView[] }
-export interface CatalogView { version: number; compiledAt: string; sourceDigest: string; services: ServiceView[] }
+export interface ProbeView {
+  id: string
+  kind: string
+  status: HealthState
+  observedAt: string
+  queriedAt?: string | null
+  sampledAt?: string | null
+  freshness?: string | null
+  reason?: string | null
+}
+export interface ServiceView {
+  id: string
+  displayName: string
+  environment: string
+  otelServiceName: string
+  diagnosisProfile: string
+  grafanaUrl: string | null
+  status: HealthState
+  applicationStatus: HealthState
+  dependencies: ProbeView[]
+  queriedAt?: string | null
+  sampledAt?: string | null
+  freshness?: string | null
+  reason?: string | null
+}
+export interface CatalogView {
+  version: number
+  compiledAt: string
+  sourceDigest: string
+  services: ServiceView[]
+  queriedAt?: string | null
+}
+
+export type PipelineStatus = 'IDLE' | 'IN_PROGRESS' | 'BACKLOG' | 'QUERY_FAILED' | 'NOT_SAMPLED' | 'SNAPSHOT_EXPIRED'
+
+export interface PipelineHealthView {
+  queriedAt: string | null
+  lastSuccessfulCheckAt: string | null
+  freshness: string | null
+  reason: string | null
+  databaseStatus: HealthState | string | null
+  activeIncidents: number | null
+  pendingRuns: number | null
+  waitingRuns?: number | null
+  inProgressRuns?: number | null
+  oldestPendingAgeSeconds: number | null
+  lastAlertAt: string | null
+  lastEvidenceAt: string | null
+  lastReportAt: string | null
+  pipelineStatus: PipelineStatus | string
+}
 
 export interface ApiError { code: string; message: string; requestId: string }

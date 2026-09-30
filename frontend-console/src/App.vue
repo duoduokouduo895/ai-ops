@@ -23,7 +23,9 @@ onBeforeUnmount(() => window.removeEventListener('aidiag:session-expired', handl
 <template>
   <RouterView v-slot="{ Component }">
     <Transition name="route" mode="out-in" @after-enter="focusPageHeading">
-      <component :is="Component" />
+      <KeepAlive include="IncidentsView">
+        <component :is="Component" />
+      </KeepAlive>
     </Transition>
   </RouterView>
 </template>

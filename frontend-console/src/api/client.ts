@@ -1,5 +1,5 @@
 import axios from 'axios'
-import type { AiAttempt, CatalogView, Evidence, IncidentDetail, IncidentPage, Overview, ReportView, SessionView, TimelineEntry } from './types'
+import type { AiAttempt, CatalogView, Evidence, IncidentDetail, IncidentPage, Overview, PipelineHealthView, ReportView, SessionView, TimelineEntry } from './types'
 
 const baseURL = import.meta.env.VITE_AIDIAG_API_BASE_URL || '/api/v1/console'
 let csrfToken = ''
@@ -33,6 +33,7 @@ export const consoleApi = {
   session: () => api.get<SessionView>('/session'),
   logout: () => api.delete('/session'),
   overview: () => api.get<Overview>('/overview'),
+  pipelineHealth: () => api.get<PipelineHealthView>('/pipeline-health'),
   services: () => api.get<CatalogView>('/services'),
   incidents: (params: Record<string, string | number | undefined>) => api.get<IncidentPage>('/incidents', { params }),
   incident: (id: string) => api.get<IncidentDetail>(`/incidents/${id}`),

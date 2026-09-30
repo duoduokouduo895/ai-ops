@@ -9,8 +9,10 @@ export type GlossaryDomain =
   | 'severity'
   | 'alert'
   | 'pipeline'
+  | 'signal'
+  | 'rule'
 
-export type StatusDomain = 'incident' | 'service' | 'run' | 'report' | 'ai' | 'severity' | 'pipeline'
+export type StatusDomain = 'incident' | 'service' | 'run' | 'report' | 'ai' | 'severity' | 'pipeline' | 'signal' | 'rule'
 
 export type StatusTone = 'success' | 'warning' | 'critical' | 'unknown' | 'neutral'
 

@@ -41,7 +41,7 @@ A centered form about 360px wide: AIDiag mark, 登录, username, password, submi
 
 ### Operations Inbox
 
-Page title `Inbox` with a 说明 control. One compact summary line for `Active incidents`, `Pending runs`, and `Resolved · 24h` — not a hero-metric card wall. `Pending runs` are unfinished diagnosis tasks, not “watching”. Recent incidents include recovered history; empty results only mean the current query returned no events.
+Page title `Inbox` with a 说明 control. One compact summary line for `Active incidents`, `Pending runs`, and `Resolved · 24h` — not a hero-metric card wall. `Pending runs` are unfinished diagnosis tasks, not “watching”. Recent incidents include recovered history; empty results only mean the current query returned no events. Between the summary and the list, a 14-day incident trend (stacked columns: CRITICAL vs WARNING / INFO, UTC days).
 
 ### Incidents
 
@@ -53,11 +53,23 @@ A single reading column, in this order:
 
 1. Event summary, open by default.
 2. Diagnosis, open by default. Only a supported root cause is a conclusion.
-3. Evidence, collapsed. Count in the heading. Available / Missing for METRIC, LOG, TRACE. No importance sparkline.
+3. Evidence, collapsed. Count in the heading. Available / Missing for METRIC, LOG, TRACE. No importance sparkline; a METRIC item shows its collected curve against the rule threshold (legacy evidence without a curve says so).
 4. Timeline, collapsed. Only evidence entries jump to evidence.
 5. Run details and AI advisory, collapsed. AI is auxiliary; do not invent advice text.
 
 Partial failures stay in their section. 401 still uses the global session-expiry path.
+
+### AI-chat
+
+The monitored-object page. Range control (`1h` / `6h` / `24h`, kept in the URL) sits in the header. One flat summary line: external probe, availability over the window, firing rules, breached signals. Signals are grouped as 可用性与请求 → 容量 → 依赖, two columns on desktop and one on mobile, separated by 1px rules rather than cards. Each signal shows its current value, a `signal` status, and — when alerted — the rule name with its `rule` state. The threshold is a dashed warning line labelled `阈值 N`, identical to the Prometheus rule. `NO_DATA` and `QUERY_FAILED` are stated in place; they are never drawn as zero. Related incidents follow at the bottom.
+
+### Charts
+
+- Hand-written SVG, no chart library; measured in real pixels so text is not stretched.
+- 2px lines, ~10% area wash only for single non-binary series, 1px solid grid in `--chart-grid`, end dot with a 2px surface ring.
+- Single series use `--chart-single` (accent). Multi-series use `--series-1..4`, bound to the entity (`success`, `timeout`, `error`, `cancelled`) in `utils/chart.ts`, never to rank; the palette is validated against `--surface-1`.
+- Missing samples break the line; the x-axis always spans the requested window.
+- Hover and keyboard (←/→/Home/End/Esc) share one crosshair tooltip listing every series; every chart has a 数据表 disclosure; a legend appears for two or more series.
 
 ### Services
 

@@ -53,6 +53,18 @@ const TABLE: Record<StatusDomain, Partial<Record<string, StatusTone>>> = {
     NOT_SAMPLED: 'unknown',
     SNAPSHOT_EXPIRED: 'unknown',
   },
+  signal: {
+    OK: 'success',
+    BREACH: 'critical',
+    NO_DATA: 'unknown',
+    QUERY_FAILED: 'unknown',
+  },
+  rule: {
+    INACTIVE: 'success',
+    PENDING: 'warning',
+    FIRING: 'critical',
+    UNKNOWN: 'unknown',
+  },
 }
 
 export function statusTone(domain: StatusDomain, value: string): StatusTone {

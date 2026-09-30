@@ -584,6 +584,90 @@ const ENTRIES: GlossaryEntry[] = [
     'PipelineHealthView.pipelineStatus SNAPSHOT_EXPIRED',
     '不能把过期缓存显示成当前空闲。'),
 
+  entry('page.ai-chat', 'AI-chat', 'AI-chat 运行监控', 'page',
+    '这是被监控主对象 AI-chat 的运行信号页：外部可用性、请求结果、首 Token 延迟、容量与依赖。',
+    '每张图都来自服务端固定 PromQL，浏览器只能选择 1h / 6h / 24h 三种窗口。带告警的信号会标出与 Prometheus 规则一致的阈值线，以及该规则当前是否 FIRING。',
+    '信号越线或规则触发后，到下方“相关事件”打开 Casefile，看诊断是否由 Metric 与 Log 证据共同支持。',
+    'ConsoleApiController GET /services/ai-chat/signals · infra/prometheus/rules/aidiag.yml',
+    '曲线只描述指标本身，不是根因结论。NO_DATA 表示本窗口没有样本，不能显示为 0 或健康；可用率按采样点计算，不是 SLA 结算口径。'),
+
+  entry('term.threshold', 'Threshold', '告警阈值', 'term',
+    '与 Prometheus 告警规则中相同的比较阈值。',
+    '图中的虚线就是规则的触发线；最新值达到或超过它时信号显示 BREACH。',
+    '规则还有 for 持续时间，越线不等于已经触发告警，请看规则状态。',
+    'SignalProfiles（由 MonitoringSignalContractTests 保证与规则一致）'),
+
+  entry('term.availability-ratio', 'Availability', '区间可用率', 'term',
+    '所选窗口内外部探针成功的采样点占比。',
+    '按图中采样点计算，用于快速判断窗口内是否出现不可达。',
+    '出现不可达时，查看同时间段的依赖探针与事件。',
+    'availability signal points',
+    '这是采样点比例，不是按秒结算的 SLA；没有样本时显示未知。'),
+
+  entry('term.incident-trend', 'Incident trend', '事件趋势', 'term',
+    '最近 14 个 UTC 日每天新开与恢复的事件数量。',
+    '柱高是新开事件数，其中 CRITICAL 单独计数；另列当天恢复数。',
+    '某天突增时，到 Incidents 按时间检索那一天的事件。',
+    'ConsoleIncidentQueryService.trend',
+    '按 UTC 日切分，与本地日期可能错开一天；数量不代表影响范围。'),
+
+  entry('term.metric-curve', 'Metric curve', '证据曲线', 'term',
+    '诊断时用固定 PromQL 取回的指标曲线（多条序列按时间取最大值合成上包络）。',
+    '虚线是规则阈值；曲线越过阈值，是这条 Metric 证据成立的依据。',
+    '还需同时满足 Log 证据，才会写入受支持根因。',
+    'TelemetryEvidenceCollector.envelope',
+    '旧证据在此功能上线前采集，只保存最大值，没有曲线。'),
+
+  entry('signal.OK', 'OK', '未越线', 'signal',
+    '最新样本低于告警阈值（或没有阈值）。',
+    '只说明这一个指标在阈值内，不代表整体健康。',
+    '结合可用性与其他信号一起判断。',
+    'SignalView.status OK'),
+
+  entry('signal.BREACH', 'BREACH', '越过阈值', 'signal',
+    '最新样本达到或超过告警阈值；可用性信号表示探测失败。',
+    '越线后，规则在持续时间满足后才会 FIRING。',
+    '查看规则状态和相关事件。',
+    'SignalView.status BREACH',
+    '越线本身不是根因结论。'),
+
+  entry('signal.NO_DATA', 'NO_DATA', '没有样本', 'signal',
+    '本窗口内这条固定查询没有返回样本。',
+    '可能是指标尚未产生、抓取中断或该功能没有流量。',
+    '检查 Prometheus 抓取目标与 AI-chat 指标导出。',
+    'SignalView.status NO_DATA',
+    '不能显示为 0，也不能当成健康。'),
+
+  entry('signal.QUERY_FAILED', 'QUERY_FAILED', '查询失败', 'signal',
+    'AIDiag 未能从 Prometheus 读到这条信号。',
+    '其他信号仍独立展示。',
+    '稍后刷新；持续失败时检查 Prometheus 可达性。',
+    'SignalView.status QUERY_FAILED'),
+
+  entry('rule.INACTIVE', 'INACTIVE', '规则未触发', 'rule',
+    'Prometheus 当前没有这条规则的 pending 或 firing 告警。',
+    '规则安静只说明条件未满足。',
+    '仍可查看曲线确认趋势。',
+    'ALERTS{service_name}'),
+
+  entry('rule.PENDING', 'PENDING', '规则等待中', 'rule',
+    '条件已满足，但还没持续到规则的 for 时长。',
+    '若持续满足会转为 FIRING 并通知 AIDiag。',
+    '观察曲线是否回落。',
+    'ALERTS alertstate=pending'),
+
+  entry('rule.FIRING', 'FIRING', '规则已触发', 'rule',
+    '告警已触发，Alertmanager 会把它推送给 AIDiag 创建或更新事件。',
+    '对应事件会出现在下方相关事件中。',
+    '打开 Casefile 阅读诊断与证据。',
+    'ALERTS alertstate=firing'),
+
+  entry('rule.UNKNOWN', 'UNKNOWN', '规则状态未知', 'rule',
+    '读取 Prometheus ALERTS 失败，无法确认规则状态。',
+    '不能当成未触发。',
+    '稍后刷新。',
+    'ALERTS query failed'),
+
   entry('page.guide', '使用说明', '如何阅读控制台', 'page',
     'AIDiag 用来阅读告警事件和诊断结论，不会执行自动修复。',
     '将鼠标移到状态上可查看含义，手机可点按。带虚线的字段名也可以查看简短解释。',
@@ -634,6 +718,14 @@ const ENTRIES: GlossaryEntry[] = [
 ]
 
 const HINTS: Record<string, string> = {
+  'signal.OK': '最新样本在阈值内；只描述这一个指标。',
+  'signal.BREACH': '最新样本已越过规则阈值；不等于根因结论。',
+  'signal.NO_DATA': '本窗口没有样本；不能当作 0 或健康。',
+  'signal.QUERY_FAILED': '这条信号本次查询失败；其他信号不受影响。',
+  'rule.INACTIVE': 'Prometheus 当前没有这条规则的告警。',
+  'rule.PENDING': '条件已满足，尚未达到规则持续时间。',
+  'rule.FIRING': '告警已触发并会推送给 AIDiag。',
+  'rule.UNKNOWN': '无法读取规则状态；不能当作未触发。',
   'incident.RESOLVED': '这条事件已记录恢复。当前服务是否健康，请看 Services 的最新采样结果。',
   'incident.CLOSED': '这条事件已关闭；关闭状态不代表当前服务健康，也不说明关闭原因。',
   'incident.OPEN': '这条事件仍需关注；可能尚在等待处理，也可能诊断后仍未形成受支持结论。',
@@ -699,6 +791,11 @@ const HINTS: Record<string, string> = {
 }
 
 const PAGE_INTROS: Record<string, string[]> = {
+  'page.ai-chat': [
+    'AI-chat 是 AIDiag 的主要监控对象。本页按“可用性 → 请求与延迟 → 容量 → 依赖”排列固定信号。',
+    '虚线是与 Prometheus 规则一致的告警阈值；规则状态显示在每张图的标题旁。',
+    '悬停或键盘聚焦图表可读取每个时间点的数值，也可以展开数据表。',
+  ],
   'page.inbox': [
     'Inbox 是事件概览：先看尚未恢复的事件和未完成的诊断任务，再打开最近记录了解详情。',
     '查找历史事件可以去 Incidents；确认当前探测结果可以去 Services。最近记录中也可能包含已经恢复的事件。',
@@ -743,4 +840,6 @@ export const GLOSSARY_GROUPS: { id: string; title: string; domain: GlossaryEntry
   { id: 'severity', title: '严重程度', domain: 'severity' },
   { id: 'alert', title: '告警名称', domain: 'alert' },
   { id: 'pipeline', title: '处理链路', domain: 'pipeline' },
+  { id: 'signal', title: '监控信号', domain: 'signal' },
+  { id: 'rule', title: '告警规则状态', domain: 'rule' },
 ]

@@ -6,6 +6,7 @@ import DisclosureSection from '../components/DisclosureSection.vue'
 import HintTerm from '../components/HintTerm.vue'
 import PageHeader from '../components/PageHeader.vue'
 import StatePanel from '../components/StatePanel.vue'
+import TimeSeriesChart from '../components/TimeSeriesChart.vue'
 import StatusBadge from '../components/StatusBadge.vue'
 import { consoleApi } from '../api/client'
 import type { AiAttempt, Evidence, EvidenceType, IncidentDetail, ReportView, TimelineEntry } from '../api/types'
@@ -44,6 +45,13 @@ const duration = computed(() => {
   if (!readAt.value) return '—'
   return `${formatDuration(incident.value.startedAt, readAt.value.toISOString())}（截至本次读取）`
 })
+
+/** Downsampled curves have a wider stride than the 30s query step; derive it so real gaps still break the line. */
+function curveStep(points: [number, number][]) {
+  let step = Number.POSITIVE_INFINITY
+  for (let index = 1; index < points.length; index++) step = Math.min(step, points[index][0] - points[index - 1][0])
+  return Number.isFinite(step) && step > 0 ? step : 30
+}
 
 function evidencePresence(type: EvidenceType) {
   return evidence.value.some((item) => item.type === type) ? 'Available' : 'Missing'
@@ -222,6 +230,21 @@ onMounted(load)
                 <small>范围 {{ formatLocal(item.startTime) }} → {{ formatLocal(item.endTime) }}</small>
                 <p>{{ item.summary }}</p>
               </button>
+              <div v-if="item.type === 'METRIC'" class="metric-curve">
+                <p class="curve-head"><HintTerm topic="term.metric-curve">证据曲线</HintTerm></p>
+                <TimeSeriesChart
+                  v-if="item.metric?.points.length"
+                  :series="[{ label: item.serviceName, color: 'var(--chart-single)', points: item.metric.points }]"
+                  :start="Date.parse(item.startTime) / 1000"
+                  :end="Date.parse(item.endTime) / 1000"
+                  :step-seconds="curveStep(item.metric.points)"
+                  unit="value"
+                  :threshold="item.metric.threshold"
+                  :height="140"
+                  :label="`${item.serviceName} 诊断窗口内的指标曲线`"
+                />
+                <p v-else class="curve-missing">这条证据在曲线采集上线前生成，只保存了最大值{{ item.metric?.maximum != null ? `（${item.metric.maximum}）` : '' }}。</p>
+              </div>
             </li>
           </ul>
         </template>
@@ -292,6 +315,9 @@ dd { margin: 6px 0 0; overflow-wrap: anywhere; }
 .tabs { display: flex; gap: 16px; overflow-x: auto; border-bottom: 1px solid var(--line); }
 .tabs button { display: inline-flex; min-height: 44px; align-items: center; border: 0; border-bottom: 2px solid transparent; background: transparent; padding: 0 2px; color: var(--text-muted); font: 600 12px var(--font-mono); cursor: pointer; }
 .tabs button.active { border-color: var(--accent); color: var(--accent-strong); }
+.metric-curve { padding: 4px 12px 14px; }
+.curve-head { margin: 0 0 6px; color: var(--text-muted); font-size: 12px; }
+.curve-missing { margin: 0; color: var(--text-muted); font-size: 12px; }
 .evidence-list, .timeline, .ai-list { margin: 0; padding: 0; list-style: none; }
 .evidence-list button, .timeline button, .moment {
   display: grid; width: 100%; gap: 4px; border: 1px solid transparent; border-radius: var(--radius-sm);

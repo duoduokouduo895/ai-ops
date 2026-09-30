@@ -6,6 +6,7 @@ const router = createRouter({
   routes: [
     { path: '/login', name: 'login', component: () => import('../views/LoginView.vue'), meta: { public: true } },
     { path: '/', name: 'inbox', component: () => import('../views/InboxView.vue') },
+    { path: '/ai-chat', name: 'ai-chat', component: () => import('../views/AiChatView.vue') },
     { path: '/services', name: 'services', component: () => import('../views/ServicesView.vue') },
     { path: '/incidents', name: 'incidents', component: () => import('../views/IncidentsView.vue') },
     { path: '/incidents/:id', name: 'casefile', component: () => import('../views/IncidentCasefileView.vue') },

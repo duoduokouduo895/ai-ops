@@ -6,8 +6,9 @@ import IncidentRecord from '../components/IncidentRecord.vue'
 import PageHeader from '../components/PageHeader.vue'
 import StatePanel from '../components/StatePanel.vue'
 import StatusBadge from '../components/StatusBadge.vue'
+import TrendBars from '../components/TrendBars.vue'
 import { consoleApi } from '../api/client'
-import type { IncidentSummary, Overview, PipelineHealthView } from '../api/types'
+import type { IncidentSummary, IncidentTrend, Overview, PipelineHealthView } from '../api/types'
 import { isUnauthorized } from '../utils/http'
 import { formatLocal } from '../utils/time'
 
@@ -18,6 +19,8 @@ const incidents = ref<IncidentSummary[]>([])
 const loading = ref(true)
 const failed = ref(false)
 const readAt = ref<Date | null>(null)
+const trend = ref<IncidentTrend | null>(null)
+const trendFailed = ref(false)
 
 const knownPipeline = computed(() => {
   const status = pipeline.value?.pipelineStatus
@@ -29,6 +32,13 @@ async function load() {
   loading.value = true
   failed.value = false
   pipelineUnavailable.value = false
+  trendFailed.value = false
+  consoleApi.trend(14).then((response) => {
+    if (Array.isArray(response.data?.items)) trend.value = response.data
+    else trendFailed.value = true
+  }).catch((error) => {
+    if (!isUnauthorized(error)) trendFailed.value = true
+  })
   try {
     const [a, b, health] = await Promise.all([
       consoleApi.overview(),
@@ -85,6 +95,14 @@ onMounted(load)
           </template>
         </div>
       </section>
+      <section class="trend" aria-labelledby="incident-trend">
+        <div class="section-head">
+          <h2 id="incident-trend" class="section-title"><HintTerm topic="term.incident-trend">Incident trend · 14d</HintTerm></h2>
+        </div>
+        <p v-if="trendFailed" class="trend-note">趋势暂时无法读取；上方摘要与下方列表不受影响。</p>
+        <div v-else-if="!trend" class="trend-skeleton skeleton" role="status" aria-label="正在读取事件趋势" />
+        <TrendBars v-else :items="trend.items" />
+      </section>
       <section class="queue" aria-labelledby="recent-incidents">
         <div class="section-head">
           <h2 id="recent-incidents" class="section-title">Recent incidents</h2>
@@ -109,6 +127,9 @@ dd { margin: 6px 0 0; font-size: 18px; font-weight: 600; letter-spacing: -.03em;
 .fresh, .pipeline { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
 .read-at { margin: 0; }
 .summary-skeleton span { height: 52px; }
+.trend { margin-bottom: 28px; }
+.trend-skeleton { height: 160px; }
+.trend-note { margin: 0; border-block: 1px solid var(--line-soft); padding: 18px 0; color: var(--text-muted); font-size: 13px; }
 .section-head { display: flex; align-items: end; justify-content: space-between; gap: 16px; padding-bottom: 8px; }
 .section-head a { display: inline-flex; min-height: 44px; align-items: center; color: var(--accent-strong); font-size: 13px; }
 .incident-list { border-bottom: 1px solid var(--line); }

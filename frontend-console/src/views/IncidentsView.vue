@@ -31,6 +31,7 @@ let requestId = 0
 
 const filters = computed(() => ({
   search: queryValue('search'),
+  service: queryValue('service'),
   status: queryValue('status'),
   severity: queryValue('severity'),
 }))
@@ -44,6 +45,7 @@ function writeQuery(patch: Record<string, string>) {
   const query: Record<string, string> = {}
   const next = { ...filters.value, ...patch }
   if (next.search) query.search = next.search
+  if (next.service) query.service = next.service
   if (next.status) query.status = next.status
   if (next.severity) query.severity = next.severity
   void router.replace({ query })
@@ -65,6 +67,7 @@ async function load(append = false) {
       status: filters.value.status || undefined,
       severity: filters.value.severity || undefined,
       search: filters.value.search || undefined,
+      service: filters.value.service || undefined,
     })
     if (id !== requestId) return
     items.value = append ? [...items.value, ...data.items] : data.items
@@ -117,6 +120,10 @@ onBeforeUnmount(() => clearTimeout(debounce))
         </select>
       </div>
     </section>
+    <p v-if="filters.service" class="scope">
+      <span>服务</span><strong class="mono">{{ filters.service }}</strong>
+      <button type="button" :aria-label="`移除服务筛选 ${filters.service}`" @click="writeQuery({ service: '' })">移除</button>
+    </p>
     <StatePanel v-if="failed" kind="error" title="Incident 列表不可达" detail="请检查 ops-api 控制面，而不是把 API 离线误判成没有告警。" action="重试" @action="load()" />
     <section v-else class="records" aria-label="Incident records">
       <div class="table-head">
@@ -141,6 +148,10 @@ onBeforeUnmount(() => clearTimeout(debounce))
 .filters input, .filters select { min-height: 44px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--surface-1); padding: 0 12px; color: var(--text); }
 .filters input::placeholder { color: var(--text-muted); }
 .filters input:focus, .filters select:focus { outline: none; border-color: var(--accent); box-shadow: var(--focus-ring); }
+.scope { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: -6px 0 14px; color: var(--text-muted); font-size: 13px; }
+.scope strong { color: var(--text); font-weight: 600; }
+.scope button { min-height: 32px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--surface-1); padding: 0 10px; color: var(--text-soft); cursor: pointer; font-size: 12px; }
+.scope button:hover { color: var(--text); border-color: var(--text-faint); }
 .records { border-block: 1px solid var(--line); }
 .table-head { display: grid; grid-template-columns: minmax(0, 1.4fr) auto auto auto auto; gap: 16px; padding: 10px 0; color: var(--text-muted); font: 600 12px/1.3 var(--font-mono); letter-spacing: .06em; text-transform: uppercase; }
 .loading, .append-error { border-top: 1px solid var(--line-soft); padding: 20px 8px; color: var(--text-muted); text-align: center; }

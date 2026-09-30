@@ -30,6 +30,15 @@
   --unknown: oklch(0.72 0.028 275);
   --unknown-soft: oklch(0.255 0.018 275);
 
+  /* Chart roles. Categorical slots are validated against --surface-1 (dataviz validate_palette, dark mode).
+     Slots are bound to entities in utils/chart.ts, never to rank. */
+  --series-1: #3987e5;
+  --series-2: #d95926;
+  --series-3: #199e70;
+  --series-4: #c98500;
+  --chart-grid: oklch(0.3 0.014 275);
+  --chart-single: var(--accent);
+
   --font-sans: Inter, "SF Pro Text", "Segoe UI", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
   --font-mono: "JetBrains Mono", "Cascadia Code", "SFMono-Regular", Consolas, "Liberation Mono", monospace;
   --radius-xs: 4px;

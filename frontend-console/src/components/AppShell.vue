@@ -18,6 +18,7 @@ const mobileNavOpen = ref(false)
 const signingOut = ref(false)
 const nav = [
   { name: 'inbox', label: 'Inbox' },
+  { name: 'ai-chat', label: 'AI-chat' },
   { name: 'incidents', label: 'Incidents' },
   { name: 'services', label: 'Services' },
 ]

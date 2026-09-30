@@ -66,6 +66,16 @@ export interface Evidence {
   collectedAt: string
   summary: string
   importance: number
+  metric?: MetricSeries | null
+}
+
+/** Points are [epochSeconds, value]. */
+export type SeriesPoint = [number, number]
+
+export interface MetricSeries {
+  threshold: number | null
+  maximum: number | null
+  points: SeriesPoint[]
 }
 
 export interface TimelineEntry {
@@ -165,6 +175,41 @@ export interface PipelineHealthView {
   lastEvidenceAt: string | null
   lastReportAt: string | null
   pipelineStatus: PipelineStatus | string
+}
+
+export interface TrendDay { day: string; opened: number; critical: number; resolved: number }
+export interface IncidentTrend { days: number; zone: string; items: TrendDay[] }
+
+export type SignalRange = '1h' | '6h' | '24h'
+export type SignalStatus = 'OK' | 'BREACH' | 'NO_DATA' | 'QUERY_FAILED'
+export type RuleState = 'FIRING' | 'PENDING' | 'INACTIVE' | 'UNKNOWN'
+
+export interface SignalSeries { label: string; points: { t: number; v: number }[] }
+export interface SignalView {
+  id: string
+  group: 'golden' | 'saturation' | 'dependency' | string
+  title: string
+  unit: string
+  description: string
+  threshold: number | null
+  alertName: string | null
+  alertState: RuleState | null
+  status: SignalStatus | string
+  reason: string | null
+  current: number | null
+  series: SignalSeries[]
+}
+export interface SignalsView {
+  serviceId: string
+  displayName: string
+  environment: string
+  otelServiceName: string
+  range: SignalRange
+  start: string
+  end: string
+  stepSeconds: number
+  queriedAt: string
+  signals: SignalView[]
 }
 
 export interface ApiError { code: string; message: string; requestId: string }

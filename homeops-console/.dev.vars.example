@@ -1,0 +1,4 @@
+# Local-only placeholders. Copy to .dev.vars and never commit the real values.
+HOMEOPS_GRAFANA_TOKEN=replace-with-viewer-service-account-token
+HOMEOPS_ORIGIN_ACCESS_CLIENT_ID=replace-with-service-token-client-id
+HOMEOPS_ORIGIN_ACCESS_CLIENT_SECRET=replace-with-service-token-client-secret

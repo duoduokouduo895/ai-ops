@@ -1,0 +1,32 @@
+{
+  "name": "homeops-console",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "build": "vue-tsc --noEmit && tsc -p functions/tsconfig.json --noEmit && vite build",
+    "test": "vitest run --config vitest.config.ts",
+    "test:functions": "vitest run --config vitest.functions.config.ts",
+    "types": "node scripts/wrangler-types.mjs",
+    "types:check": "node scripts/wrangler-types.mjs --check"
+  },
+  "dependencies": {
+    "@cloudflare/pages-plugin-cloudflare-access": "1.0.5",
+    "@lucide/vue": "1.31.0",
+    "vue": "3.5.39"
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-pool-workers": "0.21.0",
+    "@cloudflare/workers-types": "5.20260811.1",
+    "@types/node": "22.20.1",
+    "@vitejs/plugin-vue": "6.0.8",
+    "@vue/test-utils": "2.4.11",
+    "jsdom": "29.1.1",
+    "typescript": "5.9.3",
+    "vite": "8.1.4",
+    "vitest": "4.1.10",
+    "vue-tsc": "3.3.7",
+    "wrangler": "4.120.1"
+  }
+}

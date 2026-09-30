@@ -1,0 +1,21 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "homeops-console",
+  "pages_build_output_dir": "./dist",
+  "compatibility_date": "2026-08-11",
+  "compatibility_flags": ["nodejs_compat"],
+  "upload_source_maps": true,
+  "vars": {
+    "HOMEOPS_GRAFANA_BASE_URL": "https://replace-before-deploy.invalid/api/datasources/proxy/uid/prometheus",
+    "HOMEOPS_ACCESS_TEAM_DOMAIN": "https://replace-before-deploy.cloudflareaccess.com",
+    "HOMEOPS_ACCESS_AUD": "replace-before-deploy",
+    "HOMEOPS_SITE_LABEL": "XiaoXin Air 14 · Home",
+    "HOMEOPS_LOW_LOAD_BASELINE_WATTS": "6.181",
+    "HOMEOPS_LOW_LOAD_BASELINE_MEASURED_AT": "2026-08-11"
+  },
+  "observability": {
+    "enabled": true,
+    "logs": { "head_sampling_rate": 1 },
+    "traces": { "enabled": true, "head_sampling_rate": 0.05 }
+  }
+}

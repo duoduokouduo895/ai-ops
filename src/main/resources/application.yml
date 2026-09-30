@@ -102,6 +102,12 @@ aidiag:
     retention-days: ${AIDIAG_CONSOLE_RETENTION_DAYS:30}
   catalog:
     external-path: ${AIDIAG_CATALOG_EXTERNAL_PATH:}
+    freshness-seconds: ${AIDIAG_CATALOG_FRESHNESS_SECONDS:60}
+  self-monitor:
+    initial-delay-ms: ${AIDIAG_SELF_MONITOR_INITIAL_DELAY_MS:15000}
+    delay-ms: ${AIDIAG_SELF_MONITOR_DELAY_MS:15000}
+    stale-after-seconds: ${AIDIAG_SELF_MONITOR_STALE_AFTER_SECONDS:90}
+    backlog-after-seconds: ${AIDIAG_SELF_MONITOR_BACKLOG_AFTER_SECONDS:600}
   reconciliation:
     enabled: ${AIDIAG_RECONCILIATION_ENABLED:false}
     apply-transitions: ${AIDIAG_RECONCILIATION_APPLY_TRANSITIONS:false}

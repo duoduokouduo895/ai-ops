@@ -9,6 +9,8 @@ import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -18,9 +20,11 @@ import org.springframework.stereotype.Service;
 public class ConsoleIncidentQueryService {
 
     private final NamedParameterJdbcTemplate jdbcTemplate;
+    private final ObjectMapper objectMapper;
 
-    public ConsoleIncidentQueryService(NamedParameterJdbcTemplate jdbcTemplate) {
+    public ConsoleIncidentQueryService(NamedParameterJdbcTemplate jdbcTemplate, ObjectMapper objectMapper) {
         this.jdbcTemplate = jdbcTemplate;
+        this.objectMapper = objectMapper;
     }
 
     public IncidentPage incidents(String cursor, int limit, String service, String status, String severity,
@@ -96,23 +100,37 @@ public class ConsoleIncidentQueryService {
 
     public ReportView report(UUID incidentId) {
         var parameters = new MapSqlParameterSource("incidentId", incidentId);
-        return jdbcTemplate.query("""
-                SELECT r.id, r.generated_at, c.name, c.description, c.affected_service,
+        var report = jdbcTemplate.query("""
+                SELECT r.id, r.generated_at, r.diagnosis_run_id, r.primary_root_cause_id,
+                       r.report_json -> 'limitations' AS limitations
+                FROM diagnosis_report r
+                WHERE r.incident_id = :incidentId
+                ORDER BY r.generated_at DESC LIMIT 1
+                """, parameters, (resultSet, rowNumber) -> new ReportProjection.ReportRecord(
+                        resultSet.getObject("id", UUID.class), instant(resultSet.getTimestamp("generated_at")),
+                        resultSet.getObject("diagnosis_run_id", UUID.class),
+                        resultSet.getObject("primary_root_cause_id", UUID.class),
+                        limitations(resultSet.getObject("limitations"))))
+                .stream().findFirst().orElseThrow(() -> new ConsoleResourceNotFoundException("report"));
+        var candidates = jdbcTemplate.query("""
+                SELECT c.id, c.diagnosis_run_id, c.candidate_rank, c.name, c.description, c.affected_service,
                        c.support_score, c.verification_status,
                        (SELECT count(*) FROM candidate_evidence ce WHERE ce.candidate_id = c.id
                             AND ce.relationship = 'SUPPORTING') AS supporting_count,
                        (SELECT count(*) FROM candidate_evidence ce WHERE ce.candidate_id = c.id
                             AND ce.relationship = 'OPPOSING') AS opposing_count
-                FROM diagnosis_report r
-                LEFT JOIN root_cause_candidate c ON c.id = r.primary_root_cause_id
-                WHERE r.incident_id = :incidentId
-                ORDER BY r.generated_at DESC LIMIT 1
-                """, parameters, (resultSet, rowNumber) -> new ReportView(resultSet.getObject("id", UUID.class),
-                        instant(resultSet.getTimestamp("generated_at")), bounded(resultSet.getString("name"), 255),
-                        bounded(resultSet.getString("description"), 2000), resultSet.getString("affected_service"),
+                FROM root_cause_candidate c
+                JOIN diagnosis_run run ON run.id = c.diagnosis_run_id
+                WHERE run.incident_id = :incidentId AND c.diagnosis_run_id = :runId
+                ORDER BY c.candidate_rank LIMIT 3
+                """, parameters.addValue("runId", report.diagnosisRunId()),
+                (resultSet, rowNumber) -> new ReportProjection.CandidateRecord(
+                        resultSet.getObject("id", UUID.class), resultSet.getObject("diagnosis_run_id", UUID.class),
+                        resultSet.getInt("candidate_rank"), resultSet.getString("name"),
+                        resultSet.getString("description"), resultSet.getString("affected_service"),
                         resultSet.getObject("support_score", Double.class), resultSet.getString("verification_status"),
-                        resultSet.getLong("supporting_count"), resultSet.getLong("opposing_count")))
-                .stream().findFirst().orElseThrow(() -> new ConsoleResourceNotFoundException("report"));
+                        resultSet.getLong("supporting_count"), resultSet.getLong("opposing_count")));
+        return ReportProjection.project(report, candidates);
     }
 
     public List<EvidenceView> evidence(UUID incidentId) {
@@ -138,26 +156,28 @@ public class ConsoleIncidentQueryService {
                 SELECT a.id, a.alert_status, a.starts_at, a.last_received_at
                 FROM alert_event a JOIN incident_alert ia ON ia.alert_event_id = a.id
                 WHERE ia.incident_id = :incidentId ORDER BY a.last_received_at LIMIT 200
-                """, parameters, (rs, row) -> new TimelineEntry(rs.getObject("id", UUID.class),
+                """, parameters, (rs, row) -> timeline(rs.getObject("id", UUID.class),
                         "ALERT_" + rs.getString("alert_status").toUpperCase(Locale.ROOT),
-                        instant(rs.getTimestamp("last_received_at")), "Alertmanager state received")));
+                        instant(rs.getTimestamp("last_received_at")), "Alertmanager state received", "ALERT_EVENT")));
         entries.addAll(jdbcTemplate.query("""
                 SELECT id, status, COALESCE(finished_at, started_at, created_at) AS occurred_at, failure_code
                 FROM diagnosis_run WHERE incident_id = :incidentId ORDER BY attempt LIMIT 50
-                """, parameters, (rs, row) -> new TimelineEntry(rs.getObject("id", UUID.class),
+                """, parameters, (rs, row) -> timeline(rs.getObject("id", UUID.class),
                         "DIAGNOSIS_" + rs.getString("status"), instant(rs.getTimestamp("occurred_at")),
-                        rs.getString("failure_code") == null ? "Diagnosis run state" : "Diagnosis run ended with a controlled failure")));
+                        rs.getString("failure_code") == null ? "Diagnosis run state"
+                                : "Diagnosis run ended with a controlled failure",
+                        "DIAGNOSIS_RUN")));
         entries.addAll(jdbcTemplate.query("""
                 SELECT id, evidence_type, collected_at FROM evidence
                 WHERE incident_id = :incidentId ORDER BY collected_at LIMIT 500
-                """, parameters, (rs, row) -> new TimelineEntry(rs.getObject("id", UUID.class),
+                """, parameters, (rs, row) -> timeline(rs.getObject("id", UUID.class),
                         "EVIDENCE_" + rs.getString("evidence_type"), instant(rs.getTimestamp("collected_at")),
-                        "Redacted evidence collected")));
+                        "Redacted evidence collected", "EVIDENCE")));
         entries.addAll(jdbcTemplate.query("""
                 SELECT id, generated_at FROM diagnosis_report
                 WHERE incident_id = :incidentId ORDER BY generated_at LIMIT 50
-                """, parameters, (rs, row) -> new TimelineEntry(rs.getObject("id", UUID.class), "REPORT_GENERATED",
-                        instant(rs.getTimestamp("generated_at")), "Deterministic report generated")));
+                """, parameters, (rs, row) -> timeline(rs.getObject("id", UUID.class), "REPORT_GENERATED",
+                        instant(rs.getTimestamp("generated_at")), "Deterministic report generated", "DIAGNOSIS_REPORT")));
         entries.sort(java.util.Comparator.comparing(TimelineEntry::occurredAt));
         return List.copyOf(entries);
     }
@@ -220,6 +240,32 @@ public class ConsoleIncidentQueryService {
         return value == null ? null : value.toInstant();
     }
 
+    private static TimelineEntry timeline(UUID id, String type, Instant occurredAt, String summary,
+            String referenceKind) {
+        return new TimelineEntry(id, type, occurredAt, summary, referenceKind, id);
+    }
+
+    private List<String> limitations(Object raw) {
+        if (raw == null) {
+            return List.of();
+        }
+        try {
+            JsonNode node = objectMapper.readTree(raw.toString());
+            if (!node.isArray()) {
+                return List.of();
+            }
+            var values = new ArrayList<String>();
+            for (var item : node) {
+                if (item.isTextual()) {
+                    values.add(item.asText());
+                }
+            }
+            return ReportProjection.boundedLimitations(values);
+        } catch (Exception exception) {
+            return List.of();
+        }
+    }
+
     private static String bounded(String value, int length) {
         if (value == null) {
             return null;
@@ -238,10 +284,16 @@ public class ConsoleIncidentQueryService {
             Instant resolvedAt, Instant updatedAt, UUID diagnosisRunId, String diagnosisRunStatus, Integer attempt,
             String failureCode, Instant diagnosisStartedAt, Instant diagnosisFinishedAt) { }
     public record ReportView(UUID id, Instant generatedAt, String rootCause, String description, String affectedService,
+            Double supportScore, String verificationStatus, long supportingEvidence, long opposingEvidence,
+            UUID diagnosisRunId, String disposition, String dispositionReason, List<String> limitations,
+            List<ReportCandidateView> candidates) { }
+
+    public record ReportCandidateView(UUID id, int rank, String name, String description, String affectedService,
             Double supportScore, String verificationStatus, long supportingEvidence, long opposingEvidence) { }
     public record EvidenceView(UUID id, UUID diagnosisRunId, String type, String source, String serviceName,
             Instant startTime, Instant endTime, Instant collectedAt, String summary, double importance) { }
-    public record TimelineEntry(UUID evidenceId, String type, Instant occurredAt, String summary) { }
+    public record TimelineEntry(UUID evidenceId, String type, Instant occurredAt, String summary, String referenceKind,
+            UUID referenceId) { }
     public record AiAttemptView(UUID id, UUID sourceReportId, String status, String promptVersion, String modelProvider,
             String modelName, String failureCode, Instant createdAt, Instant completedAt) { }
     public record Overview(long activeIncidents, long recoveredLast24Hours, long failedIncidents, long pendingRuns,

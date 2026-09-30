@@ -1,0 +1,77 @@
+groups:
+  - name: aidiag-pipeline
+    rules:
+      # Notification failures, not absence of alert traffic. No webhook volume
+      # must not fire this rule.
+      - alert: AIDiagAlertmanagerWebhookFailed
+        expr: increase(alertmanager_notifications_failed_total{integration="webhook"}[15m]) > 0
+        for: 5m
+        labels:
+          severity: warning
+          service_name: aidiag
+        annotations:
+          summary: Alertmanager webhook notifications are failing
+          description: Recent webhook notification attempts failed. This does not prove the last successful incident timestamp is stale, and it does not fire when there is no alert traffic.
+
+      - alert: AIDiagWebhookIngestRejected
+        expr: increase(aidiag_alert_webhook_ingest_total{outcome="rejected"}[15m]) > 0
+        for: 5m
+        labels:
+          severity: warning
+          service_name: aidiag
+        annotations:
+          summary: AIDiag rejected Alertmanager webhook requests
+          description: The backend recorded rejected ingest results such as 401, 400 or 413. Check service-to-service Basic authentication. A passing config-file username check is not proof of live delivery.
+
+      - alert: AIDiagWebhookIngestFailed
+        expr: increase(aidiag_alert_webhook_ingest_total{outcome="failed"}[15m]) > 0
+        for: 5m
+        labels:
+          severity: warning
+          service_name: aidiag
+        annotations:
+          summary: AIDiag failed to persist Alertmanager webhook requests
+          description: Authenticated webhook payloads were received but persistence failed. Rejected requests are counted separately.
+
+      - alert: AIDiagPipelineBackendUnreachable
+        expr: up{job="aidiag"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          service_name: aidiag
+        annotations:
+          summary: AIDiag backend scrape is failing
+          description: Prometheus cannot scrape AIDiag. Co-located Alertmanager, Prometheus and AIDiag go dark together on host power or home-network loss; this rule is not an independent sentinel.
+
+      # NaN/absent gauges do not satisfy == 0, so an unsampled process does not
+      # look like a reachable database.
+      - alert: AIDiagPipelineSelfCheckFailed
+        expr: aidiag_database_reachable == 0
+        for: 2m
+        labels:
+          severity: warning
+          service_name: aidiag
+        annotations:
+          summary: AIDiag pipeline self-check cannot read the database
+          description: The bounded self-check failed. Pending-run gauges must be treated as unknown, not zero.
+
+      - alert: AIDiagPipelineSelfCheckStale
+        expr: aidiag_pipeline_last_success_unixtime > 0 and (time() - aidiag_pipeline_last_success_unixtime) > 120
+        for: 2m
+        labels:
+          severity: warning
+          service_name: aidiag
+        annotations:
+          summary: AIDiag pipeline self-check is stale
+          description: A successful self-check is older than two minutes. Startup before the first success does not fire because last success is unset. Console pipeline-health must then return SNAPSHOT_EXPIRED with null counts.
+
+      # IN_PROGRESS (short pending work) is 0. Unsampled/failed is NaN.
+      - alert: AIDiagDiagnosisBacklog
+        expr: aidiag_diagnosis_backlog == 1
+        for: 2m
+        labels:
+          severity: warning
+          service_name: aidiag
+        annotations:
+          summary: AIDiag diagnosis work is persistently backlogged
+          description: Oldest pending diagnosis work exceeded the backlog threshold. Short in-flight tasks are not a backlog.

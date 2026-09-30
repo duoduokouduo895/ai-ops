@@ -3,6 +3,7 @@ package com.dduo.aiops.console.api;
 import java.util.List;
 import java.util.UUID;
 
+import com.dduo.aiops.catalog.AidiagSelfMonitoring;
 import com.dduo.aiops.catalog.CatalogHealthService;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
@@ -28,10 +29,13 @@ public class ConsoleApiController {
 
     private final ConsoleIncidentQueryService queryService;
     private final CatalogHealthService catalogHealthService;
+    private final AidiagSelfMonitoring selfMonitoring;
 
-    public ConsoleApiController(ConsoleIncidentQueryService queryService, CatalogHealthService catalogHealthService) {
+    public ConsoleApiController(ConsoleIncidentQueryService queryService, CatalogHealthService catalogHealthService,
+            AidiagSelfMonitoring selfMonitoring) {
         this.queryService = queryService;
         this.catalogHealthService = catalogHealthService;
+        this.selfMonitoring = selfMonitoring;
     }
 
     @GetMapping("/overview")
@@ -42,6 +46,11 @@ public class ConsoleApiController {
     @GetMapping("/services")
     public CatalogHealthService.CatalogView services() {
         return catalogHealthService.current();
+    }
+
+    @GetMapping("/pipeline-health")
+    public AidiagSelfMonitoring.PipelineHealthView pipelineHealth() {
+        return selfMonitoring.current();
     }
 
     @GetMapping("/incidents")

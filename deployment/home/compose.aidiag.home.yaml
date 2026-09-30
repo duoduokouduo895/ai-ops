@@ -1,0 +1,53 @@
+services:
+  postgres:
+    mem_limit: 512m
+    cpus: 0.5
+
+  aidiag-backend:
+    mem_limit: 640m
+    cpus: 0.6
+    environment:
+      JAVA_TOOL_OPTIONS: -javaagent:/opt/otel/opentelemetry-javaagent.jar -XX:MaxRAMPercentage=60.0 -XX:+ExitOnOutOfMemoryError
+
+  blackbox-exporter:
+    mem_limit: 96m
+    cpus: 0.2
+    volumes:
+      - /opt/aidiag-home/runtime/monitoring/blackbox.home.yml:/etc/blackbox_exporter/blackbox.yml:ro
+
+  prometheus:
+    mem_limit: 384m
+    cpus: 0.4
+    volumes:
+      - ${AIDIAG_HOMEOPS_TARGET_FILE:-./deployment/home/home-node-target.json}:/etc/prometheus/targets/home-node.json:ro
+
+  alertmanager:
+    mem_limit: 128m
+    cpus: 0.15
+
+  alloy:
+    mem_limit: 256m
+    cpus: 0.35
+    volumes:
+      - /opt/ai-chat-home/runtime/logs/production:/var/log/ai-chat:ro
+
+  loki:
+    mem_limit: 384m
+    cpus: 0.35
+
+  tempo:
+    mem_limit: 384m
+    cpus: 0.35
+
+  grafana:
+    mem_limit: 768m
+    cpus: 0.35
+
+  faultlab-postgres:
+    profiles: ["fault-lab"]
+
+  order-service:
+    profiles: ["fault-lab"]
+
+  payment-service:
+    profiles: ["fault-lab"]

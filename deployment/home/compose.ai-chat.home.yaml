@@ -1,0 +1,8 @@
+services:
+  ai-chat-backend:
+    mem_limit: 1280m
+    cpus: 1.0
+    environment:
+      JAVA_TOOL_OPTIONS: -javaagent:/opt/otel/opentelemetry-javaagent.jar -XX:MaxRAMPercentage=60.0 -XX:+ExitOnOutOfMemoryError
+    volumes:
+      - /opt/ai-chat-home/runtime/logs/production:/var/log/ai-chat

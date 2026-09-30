@@ -1,0 +1,8 @@
+services:
+  alertmanager:
+    secrets:
+      - homeops_smtp_password
+
+secrets:
+  homeops_smtp_password:
+    file: ${AIDIAG_SECRETS_DIR:?Set AIDIAG_SECRETS_DIR}/homeops_smtp_password

@@ -1,0 +1,19 @@
+services:
+  elasticsearch9-candidate:
+    container_name: elasticsearch-v9
+    environment:
+      cluster.name: aichat-home-production
+      node.name: elasticsearch-v9
+      ES_JAVA_OPTS: -Xms1g -Xmx1g
+      # AI-chat uses external embeddings and Alertmanager, not ES ML or Watcher.
+      xpack.ml.enabled: "false"
+      xpack.watcher.enabled: "false"
+    # Keep the fixed heap at 50% of the limit; the rest covers native memory
+    # and filesystem cache. Authentication and search/IK remain enabled.
+    mem_limit: 2g
+    cpus: 1.0
+    logging:
+      driver: local
+      options:
+        max-size: 10m
+        max-file: "3"

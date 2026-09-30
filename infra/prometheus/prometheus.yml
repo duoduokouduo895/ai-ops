@@ -21,6 +21,16 @@ scrape_configs:
     static_configs:
       - targets: [alertmanager:9093]
 
+  # HomeOps is deliberately a separate read-only product. It reuses this
+  # Prometheus storage plane but does not route host alerts through AIDiag's
+  # AI-chat diagnosis model.
+  - job_name: home-node
+    scrape_interval: 15s
+    scrape_timeout: 8s
+    file_sd_configs:
+      - files: [/etc/prometheus/targets/home-node.json]
+        refresh_interval: 15s
+
   - job_name: aidiag
     metrics_path: /actuator/prometheus
     static_configs:

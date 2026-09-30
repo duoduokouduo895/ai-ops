@@ -1,0 +1,28 @@
+modules:
+  http_health:
+    prober: http
+    timeout: 5s
+    http:
+      method: GET
+      valid_status_codes: [200]
+      follow_redirects: false
+      preferred_ip_protocol: ip4
+      ip_protocol_fallback: false
+  # The public AI-chat API correctly rejects an anonymous request. A 401 here
+  # proves DNS, TLS, Cloudflare Tunnel, the application listener and its
+  # authentication boundary are reachable without exposing a public health URL.
+  http_api_unauthorized:
+    prober: http
+    timeout: 5s
+    http:
+      method: GET
+      valid_status_codes: [401]
+      follow_redirects: false
+      preferred_ip_protocol: ip4
+      ip_protocol_fallback: false
+  tcp_connect:
+    prober: tcp
+    timeout: 3s
+    tcp:
+      preferred_ip_protocol: ip4
+      ip_protocol_fallback: false

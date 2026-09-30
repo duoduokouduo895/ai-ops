@@ -355,7 +355,7 @@ services:
     secrets:
       - alertmanager_webhook_password
     volumes:
-      - ./infra/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - ${AIDIAG_ALERTMANAGER_CONFIG:-./infra/alertmanager/alertmanager.yml}:/etc/alertmanager/alertmanager.yml:ro
       - alertmanager_data:/alertmanager
     networks:
       - core

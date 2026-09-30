@@ -1,0 +1,77 @@
+name: homeops-host-exporter
+
+services:
+  homeops-power-collector:
+    image: ${NODE_EXPORTER_IMAGE:?Load versions.env before running Compose}
+    container_name: homeops-power-collector
+    restart: unless-stopped
+    user: "0:0"
+    entrypoint: ["/bin/sh", "-ec"]
+    command:
+      - |
+        while true; do
+          /bin/sh /opt/homeops/collect-host-metrics.sh /var/lib/node_exporter/textfile_collector
+          sleep 15
+        done
+    volumes:
+      - ./collect-host-metrics.sh:/opt/homeops/collect-host-metrics.sh:ro
+      - /sys/class/power_supply:/host/sys/class/power_supply:ro
+      - /sys/class/hwmon:/host/sys/class/hwmon:ro
+      - homeops_textfile:/var/lib/node_exporter/textfile_collector
+    mem_limit: 24m
+    cpus: 0.05
+    pids_limit: 32
+    read_only: true
+    tmpfs:
+      - /tmp:size=4m,mode=1777
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+
+  homeops-node-exporter:
+    image: ${NODE_EXPORTER_IMAGE:?Load versions.env before running Compose}
+    container_name: homeops-node-exporter
+    restart: unless-stopped
+    command:
+      - --path.procfs=/host/proc
+      - --path.sysfs=/host/sys
+      - --path.rootfs=/host/root
+      - --collector.filesystem.mount-points-exclude=^/(dev|proc|sys|run/credentials/.+|var/lib/docker/.+)($$|/)
+      - --collector.textfile.directory=/var/lib/node_exporter/textfile_collector
+      - --collector.systemd
+      - --collector.systemd.unit-include=(docker|frpc|cloudflared)\.service
+      - --no-collector.timex
+      - --web.listen-address=:9100
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/host/root:ro,rslave
+      - /run/dbus/system_bus_socket:/var/run/dbus/system_bus_socket:ro
+      - homeops_textfile:/var/lib/node_exporter/textfile_collector:ro
+    networks:
+      telemetry:
+        aliases: [homeops-node-exporter]
+    depends_on:
+      - homeops-power-collector
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:9100/-/ready"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    mem_limit: 64m
+    cpus: 0.15
+    pids_limit: 64
+    read_only: true
+    tmpfs:
+      - /tmp:size=8m,mode=1777
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+
+networks:
+  telemetry:
+    external: true
+    name: aidiag-telemetry
+
+volumes:
+  homeops_textfile:
+    name: homeops-textfile

@@ -1,0 +1,18 @@
+[Unit]
+Description=Clean expired AIDiag home release rollback artifacts
+After=docker.service
+Wants=docker.service
+ConditionPathExists=/opt/aidiag-home/runtime/deployment/home/cleanup-aidiag-retention.sh
+
+[Service]
+Type=oneshot
+User=dduoroot
+Group=dduoroot
+SupplementaryGroups=docker
+ExecStart=/opt/aidiag-home/runtime/deployment/home/cleanup-aidiag-retention.sh
+Environment=DOCKER_CONFIG=/tmp
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=full
+ReadWritePaths=/opt/aidiag-home

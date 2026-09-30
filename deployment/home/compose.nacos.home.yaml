@@ -1,0 +1,16 @@
+services:
+  nacos3-candidate:
+    container_name: nacos-v3
+    environment:
+      JVM_XMS: 384m
+      JVM_XMX: 768m
+      JVM_XMN: 192m
+      JVM_MS: 128m
+      JVM_MMS: 256m
+    mem_limit: 1152m
+    cpus: 0.9
+    logging:
+      driver: local
+      options:
+        max-size: 10m
+        max-file: "3"

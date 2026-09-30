@@ -1,0 +1,11 @@
+[Unit]
+Description=Daily AIDiag home release rollback retention cleanup
+
+[Timer]
+OnCalendar=*-*-* 03:30:00
+Persistent=true
+RandomizedDelaySec=15m
+Unit=aidiag-home-release-cleanup.service
+
+[Install]
+WantedBy=timers.target

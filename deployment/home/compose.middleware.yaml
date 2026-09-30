@@ -1,0 +1,100 @@
+name: aichat-home-middleware
+
+services:
+  mysql:
+    image: mysql:8.0.30
+    container_name: mysql
+    restart: unless-stopped
+    command:
+      - mysqld
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --skip-name-resolve
+    environment:
+      MYSQL_ROOT_PASSWORD_FILE: /run/secrets/mysql_bootstrap_root_password
+      TZ: Asia/Shanghai
+    secrets:
+      - mysql_bootstrap_root_password
+    volumes:
+      - /opt/ai-chat-home/runtime/data/mysql:/var/lib/mysql
+    networks:
+      middleware:
+        aliases: [mysql]
+    healthcheck:
+      test: ["CMD-SHELL", "MYSQL_PWD=$$(cat /run/secrets/mysql_bootstrap_root_password) mysqladmin ping -uroot --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 18
+      start_period: 30s
+    mem_limit: 768m
+    cpus: 1.0
+    pids_limit: 256
+    security_opt: ["no-new-privileges:true"]
+
+  redis:
+    image: redis:7.0.10
+    container_name: redis
+    restart: unless-stopped
+    command:
+      - /bin/sh
+      - -ec
+      - >-
+        exec redis-server --appendonly yes --appendfsync everysec
+        --requirepass "$$(cat /run/secrets/redis_password)"
+    secrets:
+      - redis_password
+    volumes:
+      - /opt/ai-chat-home/runtime/data/redis:/data
+    networks:
+      middleware:
+        aliases: [redis]
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli --no-auth-warning -a $$(cat /run/secrets/redis_password) ping | grep -qx PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 15s
+    mem_limit: 192m
+    cpus: 0.35
+    pids_limit: 128
+    security_opt: ["no-new-privileges:true"]
+
+  rabbitmq:
+    image: rabbitmq:3.12.0-management
+    container_name: rabbitmq
+    hostname: rabbitmq
+    restart: unless-stopped
+    secrets:
+      - rabbitmq_password
+    volumes:
+      - /opt/ai-chat-home/runtime/data/rabbitmq:/var/lib/rabbitmq
+      - ${AICHAT_HOME_SECRETS_DIR:?Set AICHAT_HOME_SECRETS_DIR}/rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf:ro
+    networks:
+      middleware:
+        aliases: [rabbitmq]
+    healthcheck:
+      test: ["CMD-SHELL", "rabbitmq-diagnostics -q ping"]
+      interval: 15s
+      timeout: 8s
+      retries: 12
+      start_period: 45s
+    mem_limit: 384m
+    cpus: 0.5
+    pids_limit: 256
+    security_opt: ["no-new-privileges:true"]
+
+networks:
+  middleware:
+    name: middleware-net
+    driver: bridge
+  nacos:
+    name: nacos-net
+    driver: bridge
+
+secrets:
+  mysql_bootstrap_root_password:
+    file: ${AICHAT_HOME_SECRETS_DIR:?Set AICHAT_HOME_SECRETS_DIR}/mysql_bootstrap_root_password
+  redis_password:
+    file: ${AICHAT_HOME_SECRETS_DIR:?Set AICHAT_HOME_SECRETS_DIR}/redis_password
+  rabbitmq_password:
+    file: ${AICHAT_HOME_SECRETS_DIR:?Set AICHAT_HOME_SECRETS_DIR}/rabbitmq_password

@@ -1,0 +1,9 @@
+[
+  {
+    "targets": ["homeops-node-exporter:9100"],
+    "labels": {
+      "service_name": "home-server",
+      "alert_scope": "homeops"
+    }
+  }
+]

@@ -16,7 +16,9 @@ Nacos 3 暂时保留运行，供上一版 AI-chat release 回滚；新版本的 
 
 不启动：旧 Nacos 2、旧 Elasticsearch 8、Fault Lab、历史 Prometheus/Loki/Tempo 数据与过期 release。
 
-资源上限合计约 7.7GiB；实际运行量通常更低，但仍需保留约 1.5GiB 给 Ubuntu、Docker 与突发缓存。任何服务持续接近其上限时，应先观察 Grafana，再调高单项上限，不要整体放宽。
+ES 使用固定 `-Xms1g -Xmx1g` 堆和 `2g` 容器上限，保留一半空间给堆外内存与文件缓存；关闭未使用的 ML 和 Watcher，保留鉴权、全文搜索与 IK。AI-chat（1280 MiB）和 AIDiag（640 MiB）使用 `-XX:MaxRAMPercentage=60.0`，并在 JVM OOM 时退出。
+
+不运行 Nacos 和 Fault Lab 时，本项目当前服务的内存上限合计约 8.03 GiB；2026-09-30 家服另有上限 768 MiB 的 garment-manager，15 个活动容器合计约 8.78 GiB。上限之和不是实际常驻内存，也不保证宿主机不会 OOM；发布前后必须核对 `MemAvailable`、swap、容器占用和 OOM 状态。规划仍应给 Ubuntu、Docker 与突发缓存预留约 1.5 GiB，其他项目也必须纳入预算，不能整体放宽上限。
 
 这些文件不包含 IP、域名、密码、Token 或生产 `.env`。实际 runtime Secret 必须在 `/opt/ai-chat-home/runtime/.secrets` 与 `/opt/aidiag-home/runtime/.secrets` 中以 `700/600` 权限保存。
 

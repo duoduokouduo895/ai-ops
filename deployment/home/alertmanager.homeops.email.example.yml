@@ -1,0 +1,50 @@
+# Copy this file outside the release directory, replace every REPLACE_* value,
+# set AIDIAG_ALERTMANAGER_CONFIG to that runtime path, and validate with amtool
+# before reloading Alertmanager. Never place the SMTP password in this file.
+global:
+  resolve_timeout: 5m
+  smtp_from: homeops@example.invalid
+  smtp_smarthost: smtp.example.invalid:587
+  smtp_auth_username: homeops@example.invalid
+  smtp_auth_password_file: /run/secrets/homeops_smtp_password
+  smtp_require_tls: true
+
+route:
+  receiver: aidiag-webhook
+  group_by: [alertname, service_name, environment]
+  group_wait: 10s
+  group_interval: 1m
+  repeat_interval: 4h
+  routes:
+    - receiver: homeops-email
+      matchers:
+        - alert_scope="homeops"
+      group_by: [alertname, service_name]
+      repeat_interval: 2h
+
+receivers:
+  - name: aidiag-webhook
+    webhook_configs:
+      - url: http://aidiag-backend:8080/api/v1/alerts/alertmanager
+        send_resolved: true
+        max_alerts: 20
+        timeout: 10s
+        http_config:
+          basic_auth:
+            username: alertmanager
+            password_file: /run/secrets/alertmanager_webhook_password
+
+  - name: homeops-email
+    email_configs:
+      - to: owner@example.invalid
+        send_resolved: true
+        headers:
+          subject: '[HomeOps][{{ .Status | toUpper }}] {{ .CommonAnnotations.summary }}'
+        text: |-
+          状态：{{ .Status }}
+          主机：{{ .CommonLabels.service_name }}
+          级别：{{ .CommonLabels.severity }}
+          摘要：{{ .CommonAnnotations.summary }}
+          说明：{{ .CommonAnnotations.description }}
+          告警数：{{ len .Alerts }}
+          {{ if eq .Status "resolved" }}家庭服务器相关指标已经恢复。{{ end }}

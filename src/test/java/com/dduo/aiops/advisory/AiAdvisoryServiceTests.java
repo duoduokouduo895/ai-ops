@@ -1,4 +1,4 @@
-package com.dduo.aiops.aid;
+package com.dduo.aiops.advisory;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -19,7 +19,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.env.MockEnvironment;
 
-class Stage4AiDiagnosisServiceTests {
+class AiAdvisoryServiceTests {
 
     private static final UUID INCIDENT_ID = UUID.fromString("10000000-0000-0000-0000-000000000001");
     private static final UUID REPORT_ID = UUID.fromString("20000000-0000-0000-0000-000000000002");
@@ -27,7 +27,7 @@ class Stage4AiDiagnosisServiceTests {
     private static final UUID ATTEMPT_ID = UUID.fromString("40000000-0000-0000-0000-000000000004");
     private static final UUID EVIDENCE_ID = UUID.fromString("50000000-0000-0000-0000-000000000005");
 
-    private Stage4AiDiagnosisService service;
+    private AiAdvisoryService service;
 
     @AfterEach
     void stopExecutor() {
@@ -54,10 +54,10 @@ class Stage4AiDiagnosisServiceTests {
     @Test
     void fallsBackWhenNoChatModelIsAvailable() {
         var repository = repository();
-        var model = mock(Stage4ModelClient.class);
+        var model = mock(AdvisoryModelClient.class);
         when(model.provider()).thenReturn("unconfigured");
         when(model.modelName()).thenReturn("unconfigured");
-        when(model.generate(any())).thenThrow(new Stage4ModelUnavailableException("No model"));
+        when(model.generate(any())).thenThrow(new AdvisoryModelUnavailableException("No model"));
         service = service(repository, model, 2);
 
         var result = service.preview(INCIDENT_ID);
@@ -73,7 +73,7 @@ class Stage4AiDiagnosisServiceTests {
     void timesOutAndInterruptsASlowModelCall() {
         var repository = repository();
         var interrupted = new java.util.concurrent.atomic.AtomicBoolean();
-        var model = mock(Stage4ModelClient.class);
+        var model = mock(AdvisoryModelClient.class);
         when(model.provider()).thenReturn("test");
         when(model.modelName()).thenReturn("slow-test-model");
         when(model.generate(any())).thenAnswer(invocation -> {
@@ -97,7 +97,7 @@ class Stage4AiDiagnosisServiceTests {
     @Test
     void disabledStageFourNeverCallsTheModel() {
         var repository = repository();
-        var model = mock(Stage4ModelClient.class);
+        var model = mock(AdvisoryModelClient.class);
         when(model.provider()).thenReturn("unconfigured");
         when(model.modelName()).thenReturn("unconfigured");
         service = service(repository, model, 2, false);
@@ -126,7 +126,7 @@ class Stage4AiDiagnosisServiceTests {
     void redactsStandaloneCredentialsAndPersonalDataBeforeCallingTheModel() {
         var repository = repository();
         var fakeApiKey = "sk-" + "1234567890abcdefghijkl";
-        when(repository.evidence(RUN_ID, 12)).thenReturn(List.of(new Stage4Repository.EvidenceSnapshot(EVIDENCE_ID, "LOG",
+        when(repository.evidence(RUN_ID, 12)).thenReturn(List.of(new AiAdvisoryRepository.EvidenceSnapshot(EVIDENCE_ID, "LOG",
                 "loki", fakeApiKey + " cookie=abc user@example.com 13800138000 https://user:pass@example.test/path")));
         var model = modelReturning(new AiDiagnosisAdvice("summary", List.of("hypothesis"), List.of(), List.of(), List.of()));
         service = service(repository, model, 2);
@@ -140,38 +140,38 @@ class Stage4AiDiagnosisServiceTests {
                 .contains("[REDACTED_API_KEY]", "[REDACTED_EMAIL]", "[REDACTED_PHONE]");
     }
 
-    private static Stage4Repository repository() {
-        var repository = mock(Stage4Repository.class);
+    private static AiAdvisoryRepository repository() {
+        var repository = mock(AiAdvisoryRepository.class);
         var reportJson = """
                 {"candidate":"DOWNSTREAM_TIMEOUT","verificationStatus":"SUPPORTED","supportScore":65,
                  "remediationTemplate":[{"action":"Disable controlled fault"}]}
                 """;
-        when(repository.latestReport(INCIDENT_ID)).thenReturn(Optional.of(new Stage4Repository.ReportSnapshot(REPORT_ID, RUN_ID,
+        when(repository.latestReport(INCIDENT_ID)).thenReturn(Optional.of(new AiAdvisoryRepository.ReportSnapshot(REPORT_ID, RUN_ID,
                 "payment-service", "FaultLabDownstreamTimeout", "CRITICAL", reportJson)));
         when(repository.evidence(RUN_ID, 12)).thenReturn(List.of(
-                new Stage4Repository.EvidenceSnapshot(EVIDENCE_ID, "METRIC", "prometheus", "bounded evidence")));
+                new AiAdvisoryRepository.EvidenceSnapshot(EVIDENCE_ID, "METRIC", "prometheus", "bounded evidence")));
         when(repository.startAttempt(eq(INCIDENT_ID), eq(REPORT_ID), eq("stage4-v1"), any(), any(), any())).thenReturn(ATTEMPT_ID);
         when(repository.reserveDailyRequest(20)).thenReturn(true);
         return repository;
     }
 
-    private static Stage4ModelClient modelReturning(AiDiagnosisAdvice advice) {
-        var model = mock(Stage4ModelClient.class);
+    private static AdvisoryModelClient modelReturning(AiDiagnosisAdvice advice) {
+        var model = mock(AdvisoryModelClient.class);
         when(model.provider()).thenReturn("test");
         when(model.modelName()).thenReturn("test-model");
         when(model.generate(any())).thenReturn(advice);
         return model;
     }
 
-    private Stage4AiDiagnosisService service(Stage4Repository repository, Stage4ModelClient model, int timeoutSeconds) {
+    private AiAdvisoryService service(AiAdvisoryRepository repository, AdvisoryModelClient model, int timeoutSeconds) {
         return service(repository, model, timeoutSeconds, true);
     }
 
-    private Stage4AiDiagnosisService service(Stage4Repository repository, Stage4ModelClient model, int timeoutSeconds,
+    private AiAdvisoryService service(AiAdvisoryRepository repository, AdvisoryModelClient model, int timeoutSeconds,
             boolean enabled) {
         var environment = new MockEnvironment().withProperty("aidiag.stage4.enabled", Boolean.toString(enabled))
                 .withProperty("aidiag.stage4.timeout-seconds", Integer.toString(timeoutSeconds));
-        return new Stage4AiDiagnosisService(repository, model, new AiDiagnosisAdviceValidator(), new Stage4Settings(environment),
+        return new AiAdvisoryService(repository, model, new AiDiagnosisAdviceValidator(), new AiAdvisorySettings(environment),
                 new ObjectMapper());
     }
 }

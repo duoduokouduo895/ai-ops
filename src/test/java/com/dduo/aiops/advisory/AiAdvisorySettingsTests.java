@@ -1,4 +1,4 @@
-package com.dduo.aiops.aid;
+package com.dduo.aiops.advisory;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -6,11 +6,11 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.env.MockEnvironment;
 
-class Stage4SettingsTests {
+class AiAdvisorySettingsTests {
 
     @Test
     void usesConservativeDefaultBudgets() {
-        var settings = new Stage4Settings(new MockEnvironment());
+        var settings = new AiAdvisorySettings(new MockEnvironment());
 
         assertThat(settings.dailyRequestLimit()).isEqualTo(20);
         assertThat(settings.maxPromptChars()).isEqualTo(16_000);
@@ -22,7 +22,7 @@ class Stage4SettingsTests {
     void rejectsAnUnboundedDailyLimit() {
         var environment = new MockEnvironment().withProperty("aidiag.stage4.daily-request-limit", "101");
 
-        assertThatThrownBy(() -> new Stage4Settings(environment))
+        assertThatThrownBy(() -> new AiAdvisorySettings(environment))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("daily-request-limit");
     }

@@ -59,7 +59,7 @@ public class TelemetryEvidenceCollector {
             var matched = maximum.sampleCount() > 0 && maximum.value() >= rule.metricThreshold();
             var rawData = json(Map.of("sampleCount", maximum.sampleCount(), "maximum", maximum.value(),
                     "threshold", rule.metricThreshold()));
-            var evidence = new Stage3DiagnosisRepository.EvidenceDraft("METRIC", "prometheus", window.start(), window.end(), request,
+            var evidence = new DiagnosisRepository.EvidenceDraft("METRIC", "prometheus", window.start(), window.end(), request,
                     "固定 PromQL（" + rule.metricDescription() + "）最大值 " + maximum.value() + "，阈值 " + rule.metricThreshold(),
                     rawData, BigDecimal.valueOf(30), matched);
             return success(matched, "queryServiceMetrics", request, rawData, started, evidence);
@@ -79,7 +79,7 @@ public class TelemetryEvidenceCollector {
             var matchedLines = logLineCount(response.path("data").path("result"));
             var matched = matchedLines > 0;
             var rawData = json(Map.of("matchedLines", matchedLines, "marker", rule.logMarker()));
-            var evidence = new Stage3DiagnosisRepository.EvidenceDraft("LOG", "loki", window.start(), window.end(), request,
+            var evidence = new DiagnosisRepository.EvidenceDraft("LOG", "loki", window.start(), window.end(), request,
                     "固定 LogQL 匹配到 " + matchedLines + " 条 " + rule.logMarker() + " 事件", rawData,
                     BigDecimal.valueOf(25), matched);
             return success(matched, "queryServiceLogs", request, rawData, started, evidence);
@@ -99,7 +99,7 @@ public class TelemetryEvidenceCollector {
             var traces = compactTraces(response.path("traces"));
             var matched = !traces.isEmpty();
             var rawData = json(Map.of("traceCount", traces.size(), "traces", traces));
-            var evidence = new Stage3DiagnosisRepository.EvidenceDraft("TRACE", "tempo", window.start(), window.end(), request,
+            var evidence = new DiagnosisRepository.EvidenceDraft("TRACE", "tempo", window.start(), window.end(), request,
                     "固定 TraceQL 匹配到 " + traces.size() + " 条 Trace（最多保留 " + MAX_TRACES + " 条摘要）", rawData,
                     BigDecimal.valueOf(20), matched);
             return success(matched, "queryServiceTraces", request, rawData, started, evidence);
@@ -109,13 +109,13 @@ public class TelemetryEvidenceCollector {
     }
 
     private CollectedObservation success(boolean matched, String toolName, String request, String rawData, long started,
-            Stage3DiagnosisRepository.EvidenceDraft evidence) {
-        return new CollectedObservation(matched, true, new Stage3DiagnosisRepository.ToolObservation(toolName, request,
+            DiagnosisRepository.EvidenceDraft evidence) {
+        return new CollectedObservation(matched, true, new DiagnosisRepository.ToolObservation(toolName, request,
                 rawData, "SUCCEEDED", elapsedMillis(started), null, evidence));
     }
 
     private CollectedObservation failed(String toolName, String request, long started) {
-        return new CollectedObservation(false, false, new Stage3DiagnosisRepository.ToolObservation(toolName, request,
+        return new CollectedObservation(false, false, new DiagnosisRepository.ToolObservation(toolName, request,
                 "{\"outcome\":\"collection_failed\"}", "FAILED", elapsedMillis(started), "collection_failed", null));
     }
 
@@ -207,7 +207,7 @@ public class TelemetryEvidenceCollector {
     }
 
     public record CollectedObservation(boolean matched, boolean collected,
-            Stage3DiagnosisRepository.ToolObservation observation) {
+            DiagnosisRepository.ToolObservation observation) {
     }
 
     private record Maximum(double value, int sampleCount) {

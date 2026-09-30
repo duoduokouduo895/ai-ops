@@ -1,4 +1,4 @@
-package com.dduo.aiops.aid;
+package com.dduo.aiops.advisory;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -11,18 +11,18 @@ import org.springframework.core.env.StandardEnvironment;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 
-class Stage4OperatorAuthenticatorTests {
+class AdvisoryOperatorAuthenticatorTests {
 
     @Test
     void failsClosedWithoutAnOperatorPassword() {
-        var authenticator = new Stage4OperatorAuthenticator("operator", "");
+        var authenticator = new AdvisoryOperatorAuthenticator("operator", "");
 
         assertThat(authenticator.isAuthorized(basic("operator", ""))).isFalse();
     }
 
     @Test
     void acceptsOnlyTheDedicatedOperatorCredentials() {
-        var authenticator = new Stage4OperatorAuthenticator("operator", "test-password");
+        var authenticator = new AdvisoryOperatorAuthenticator("operator", "test-password");
 
         assertThat(authenticator.isAuthorized(basic("operator", "test-password"))).isTrue();
         assertThat(authenticator.isAuthorized(basic("operator", "wrong"))).isFalse();
@@ -32,10 +32,10 @@ class Stage4OperatorAuthenticatorTests {
     @Test
     void springCanInstantiateTheAuthenticatorWhenTestConstructorAlsoExists() {
         try (var context = new AnnotationConfigApplicationContext()) {
-            context.register(Stage4OperatorAuthenticator.class);
+            context.register(AdvisoryOperatorAuthenticator.class);
             context.refresh();
 
-            assertThat(context.getBean(Stage4OperatorAuthenticator.class)).isNotNull();
+            assertThat(context.getBean(AdvisoryOperatorAuthenticator.class)).isNotNull();
         }
     }
 
@@ -45,7 +45,7 @@ class Stage4OperatorAuthenticatorTests {
         var sources = new YamlPropertySourceLoader().load("application", new ClassPathResource("application.yml"));
         sources.forEach(source -> environment.getPropertySources().addFirst(source));
 
-        assertThat(new Stage4OperatorAuthenticator(environment).isAuthorized(null)).isFalse();
+        assertThat(new AdvisoryOperatorAuthenticator(environment).isAuthorized(null)).isFalse();
     }
 
     private static String basic(String username, String password) {

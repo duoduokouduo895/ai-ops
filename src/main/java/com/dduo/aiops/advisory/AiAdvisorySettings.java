@@ -1,11 +1,11 @@
-package com.dduo.aiops.aid;
+package com.dduo.aiops.advisory;
 
 import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Component;
 
 /** Bounded Stage 4 settings. Provider-specific settings remain with the selected Spring AI provider. */
 @Component
-public class Stage4Settings {
+public class AiAdvisorySettings {
 
     private final boolean enabled;
     private final String promptVersion;
@@ -16,7 +16,7 @@ public class Stage4Settings {
     private final int maxOutputTokens;
     private final int retentionDays;
 
-    public Stage4Settings(Environment environment) {
+    public AiAdvisorySettings(Environment environment) {
         this.enabled = environment.getProperty("aidiag.stage4.enabled", Boolean.class, false);
         this.promptVersion = environment.getProperty("aidiag.stage4.prompt-version", "stage4-v1");
         this.maxEvidence = environment.getProperty("aidiag.stage4.max-evidence", Integer.class, 12);

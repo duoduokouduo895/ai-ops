@@ -15,11 +15,11 @@ import org.springframework.stereotype.Component;
 /** Stage 3 is deterministic: it creates an evidence-backed report and never invokes an LLM or remediation. */
 @Component
 @ConditionalOnProperty(prefix = "aidiag.stage3", name = "enabled", havingValue = "true")
-public class Stage3DiagnosisWorker {
+public class DiagnosisWorker {
 
-    private static final Logger log = LoggerFactory.getLogger(Stage3DiagnosisWorker.class);
+    private static final Logger log = LoggerFactory.getLogger(DiagnosisWorker.class);
 
-    private final Stage3DiagnosisRepository repository;
+    private final DiagnosisRepository repository;
     private final DiagnosisRunRepository runRepository;
     private final RuleBasedDiagnosisService diagnosisService;
     private final String owner;
@@ -29,7 +29,7 @@ public class Stage3DiagnosisWorker {
     private final Counter completed;
     private final Counter stale;
 
-    public Stage3DiagnosisWorker(Stage3DiagnosisRepository repository, DiagnosisRunRepository runRepository,
+    public DiagnosisWorker(DiagnosisRepository repository, DiagnosisRunRepository runRepository,
             RuleBasedDiagnosisService diagnosisService, Environment environment, MeterRegistry meterRegistry) {
         this.repository = repository;
         this.runRepository = runRepository;
@@ -47,7 +47,7 @@ public class Stage3DiagnosisWorker {
         repository.claimNext(owner, leaseSeconds).ifPresent(this::process);
     }
 
-    private void process(Stage3DiagnosisRepository.ClaimedAnalysisRun run) {
+    private void process(DiagnosisRepository.ClaimedAnalysisRun run) {
         var fencedRun = new DiagnosisRunRepository.ClaimedRun(run.id(), run.incidentId(), run.attempt(), run.owner(), run.leaseToken());
         try {
             var incident = repository.incident(run.incidentId());

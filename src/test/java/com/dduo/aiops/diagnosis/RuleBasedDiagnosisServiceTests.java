@@ -14,7 +14,7 @@ import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import com.dduo.aiops.diagnosis.Stage3DiagnosisRepository.IncidentContext;
+import com.dduo.aiops.diagnosis.DiagnosisRepository.IncidentContext;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -77,7 +77,7 @@ class RuleBasedDiagnosisServiceTests {
             var result = service.diagnose(incident("payment-service", alertName));
             assertThat(result.verificationStatus()).isEqualTo("SUPPORTED");
             assertThat(result.supportScore()).isEqualByComparingTo("75");
-            assertThat(result.observations()).extracting(Stage3DiagnosisRepository.ToolObservation::toolName)
+            assertThat(result.observations()).extracting(DiagnosisRepository.ToolObservation::toolName)
                     .containsExactly("queryServiceMetrics", "queryServiceLogs", "queryServiceTraces");
         }
         assertThat(metricQueries).containsExactlyElementsOf(expectedQueries);

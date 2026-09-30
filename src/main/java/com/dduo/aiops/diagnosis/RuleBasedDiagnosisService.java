@@ -21,15 +21,15 @@ public class RuleBasedDiagnosisService {
         this.collector = collector;
     }
 
-    public Stage3DiagnosisRepository.DiagnosisResult diagnose(Stage3DiagnosisRepository.IncidentContext incident) {
+    public DiagnosisRepository.DiagnosisResult diagnose(DiagnosisRepository.IncidentContext incident) {
         return diagnose(incident, () -> true);
     }
 
-    Stage3DiagnosisRepository.DiagnosisResult diagnose(Stage3DiagnosisRepository.IncidentContext incident,
+    DiagnosisRepository.DiagnosisResult diagnose(DiagnosisRepository.IncidentContext incident,
             BooleanSupplier renewLease) {
         var rule = registry.find(incident.primaryService(), incident.alertName()).orElse(null);
         if (rule == null) {
-            return new Stage3DiagnosisRepository.DiagnosisResult("NO_DETERMINISTIC_RULE", "UNSPECIFIED",
+            return new DiagnosisRepository.DiagnosisResult("NO_DETERMINISTIC_RULE", "UNSPECIFIED",
                     "当前 service/alert 不在固定规则白名单中；报告仅记录证据不足，未查询遥测或推断根因。",
                     BigDecimal.ZERO, "INSUFFICIENT_EVIDENCE", "[]", List.of(),
                     List.of("未匹配确定性规则", "未调用 LLM", "未执行自动修复"));
@@ -67,7 +67,7 @@ public class RuleBasedDiagnosisService {
         if (!"SUPPORTED".equals(verification)) {
             limitations.add("Metric 与 Log 两类独立 P0 证据未同时满足，不能确认主要根因");
         }
-        return new Stage3DiagnosisRepository.DiagnosisResult(rule.candidateName(), rule.groundTruth(), rule.description(), score,
+        return new DiagnosisRepository.DiagnosisResult(rule.candidateName(), rule.groundTruth(), rule.description(), score,
                 verification, rule.remediationJson(),
                 List.of(metric.observation(), logs.observation(), traces.observation()), limitations);
     }
@@ -93,7 +93,7 @@ public class RuleBasedDiagnosisService {
         }
     }
 
-    private static TelemetryEvidenceCollector.TimeWindow timeWindow(Stage3DiagnosisRepository.IncidentContext incident) {
+    private static TelemetryEvidenceCollector.TimeWindow timeWindow(DiagnosisRepository.IncidentContext incident) {
         var now = Instant.now();
         var start = incident.startedAt().minus(Duration.ofMinutes(10));
         var eventEnd = incident.lastAlertAt().plus(Duration.ofMinutes(5));

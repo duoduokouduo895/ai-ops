@@ -1,4 +1,4 @@
-package com.dduo.aiops.aid;
+package com.dduo.aiops.advisory;
 
 import java.util.List;
 import java.util.Optional;
@@ -10,11 +10,11 @@ import org.springframework.transaction.annotation.Transactional;
 
 /** Reads the immutable deterministic report and records every Stage 4 outcome separately. */
 @Repository
-public class Stage4Repository {
+public class AiAdvisoryRepository {
 
     private final JdbcTemplate jdbcTemplate;
 
-    public Stage4Repository(JdbcTemplate jdbcTemplate) {
+    public AiAdvisoryRepository(JdbcTemplate jdbcTemplate) {
         this.jdbcTemplate = jdbcTemplate;
     }
 

@@ -20,12 +20,12 @@ import org.springframework.transaction.annotation.Transactional;
 
 /** Persists a deterministic Stage 3 report only while the caller still owns its lease. */
 @Repository
-public class Stage3DiagnosisRepository {
+public class DiagnosisRepository {
 
     private final JdbcTemplate jdbcTemplate;
     private final ObjectMapper objectMapper;
 
-    public Stage3DiagnosisRepository(JdbcTemplate jdbcTemplate, ObjectMapper objectMapper) {
+    public DiagnosisRepository(JdbcTemplate jdbcTemplate, ObjectMapper objectMapper) {
         this.jdbcTemplate = jdbcTemplate;
         this.objectMapper = objectMapper;
     }

@@ -1,4 +1,4 @@
-package com.dduo.aiops.aid;
+package com.dduo.aiops.advisory;
 
 import static org.assertj.core.api.Assertions.assertThat;
 

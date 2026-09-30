@@ -1,4 +1,4 @@
-package com.dduo.aiops.aid;
+package com.dduo.aiops.advisory;
 
 import java.util.NoSuchElementException;
 import java.util.UUID;
@@ -18,16 +18,16 @@ import org.springframework.web.bind.annotation.RestController;
 @ConditionalOnProperty(prefix = "aidiag.stage4", name = "enabled", havingValue = "true")
 public class AiDiagnosisPreviewController {
 
-    private final Stage4AiDiagnosisService service;
-    private final Stage4OperatorAuthenticator authenticator;
+    private final AiAdvisoryService service;
+    private final AdvisoryOperatorAuthenticator authenticator;
 
-    public AiDiagnosisPreviewController(Stage4AiDiagnosisService service, Stage4OperatorAuthenticator authenticator) {
+    public AiDiagnosisPreviewController(AiAdvisoryService service, AdvisoryOperatorAuthenticator authenticator) {
         this.service = service;
         this.authenticator = authenticator;
     }
 
     @PostMapping("/{incidentId}/ai-diagnosis-preview")
-    public ResponseEntity<Stage4AiDiagnosisService.PreviewResult> preview(
+    public ResponseEntity<AiAdvisoryService.PreviewResult> preview(
             @org.springframework.web.bind.annotation.RequestHeader(name = HttpHeaders.AUTHORIZATION, required = false) String authorization,
             @PathVariable UUID incidentId) {
         if (!authenticator.isAuthorized(authorization)) {

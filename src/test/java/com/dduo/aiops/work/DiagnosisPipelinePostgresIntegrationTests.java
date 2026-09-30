@@ -15,9 +15,9 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 
 import com.dduo.aiops.alerts.AlertmanagerWebhookService;
-import com.dduo.aiops.aid.Stage4Repository;
+import com.dduo.aiops.advisory.AiAdvisoryRepository;
 import com.dduo.aiops.diagnosis.DiagnosisReportController;
-import com.dduo.aiops.diagnosis.Stage3DiagnosisRepository;
+import com.dduo.aiops.diagnosis.DiagnosisRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.junit.jupiter.api.AfterEach;
@@ -34,7 +34,7 @@ import org.springframework.transaction.annotation.Transactional;
 @EnabledIfEnvironmentVariable(named = "AIDIAG_INTEGRATION_TESTS", matches = "true")
 @SpringBootTest(properties = { "aidiag.worker.enabled=false", "aidiag.smoke.enabled=false", "springdoc.api-docs.enabled=false",
         "springdoc.swagger-ui.enabled=false", "aidiag.stage3.enabled=false" })
-class Stage2PostgresIntegrationTests {
+class DiagnosisPipelinePostgresIntegrationTests {
 
     @Autowired
     private AlertmanagerWebhookService webhookService;
@@ -43,10 +43,10 @@ class Stage2PostgresIntegrationTests {
     private DiagnosisRunRepository diagnosisRunRepository;
 
     @Autowired
-    private Stage3DiagnosisRepository stage3DiagnosisRepository;
+    private DiagnosisRepository stage3DiagnosisRepository;
 
     @Autowired
-    private Stage4Repository stage4Repository;
+    private AiAdvisoryRepository stage4Repository;
 
     @Autowired
     private DiagnosisReportController diagnosisReportController;
@@ -227,12 +227,12 @@ class Stage2PostgresIntegrationTests {
                     lease_until = CURRENT_TIMESTAMP + INTERVAL '30 seconds'
                 WHERE id = ?
                 """, "stage3-test", token, run.id());
-        var claimed = new Stage3DiagnosisRepository.ClaimedAnalysisRun(run.id(), run.incidentId(), 1, "stage3-test", token);
+        var claimed = new DiagnosisRepository.ClaimedAnalysisRun(run.id(), run.incidentId(), 1, "stage3-test", token);
         var incident = stage3DiagnosisRepository.incident(run.incidentId());
-        var evidence = new Stage3DiagnosisRepository.EvidenceDraft("METRIC", "test", incident.startedAt(), incident.lastAlertAt(),
+        var evidence = new DiagnosisRepository.EvidenceDraft("METRIC", "test", incident.startedAt(), incident.lastAlertAt(),
                 "{\"template\":\"test\"}", "test evidence", "{\"matched\":true}", BigDecimal.valueOf(30), true);
-        var result = new Stage3DiagnosisRepository.DiagnosisResult("TEST_RULE", "TEST_GROUND_TRUTH", "test-only deterministic result", BigDecimal.valueOf(65),
-                "SUPPORTED", "[]", List.of(new Stage3DiagnosisRepository.ToolObservation("queryServiceMetrics", "{\"template\":\"test\"}",
+        var result = new DiagnosisRepository.DiagnosisResult("TEST_RULE", "TEST_GROUND_TRUTH", "test-only deterministic result", BigDecimal.valueOf(65),
+                "SUPPORTED", "[]", List.of(new DiagnosisRepository.ToolObservation("queryServiceMetrics", "{\"template\":\"test\"}",
                 "{\"matched\":true}", "SUCCEEDED", 1, null, evidence)), List.of("integration test"));
 
         var receipt = stage3DiagnosisRepository.finalizeReport(claimed, incident, result);
@@ -266,10 +266,10 @@ class Stage2PostgresIntegrationTests {
                     lease_until = CURRENT_TIMESTAMP + INTERVAL '30 seconds'
                 WHERE id = ?
                 """, "stage3-insufficient-test", token, run.id());
-        var claimed = new Stage3DiagnosisRepository.ClaimedAnalysisRun(run.id(), run.incidentId(), 1,
+        var claimed = new DiagnosisRepository.ClaimedAnalysisRun(run.id(), run.incidentId(), 1,
                 "stage3-insufficient-test", token);
         var incident = stage3DiagnosisRepository.incident(run.incidentId());
-        var result = new Stage3DiagnosisRepository.DiagnosisResult("NO_DETERMINISTIC_RULE", "UNSPECIFIED", "missing independent evidence",
+        var result = new DiagnosisRepository.DiagnosisResult("NO_DETERMINISTIC_RULE", "UNSPECIFIED", "missing independent evidence",
                 BigDecimal.ZERO, "INSUFFICIENT_EVIDENCE", "[]", List.of(), List.of("integration test"));
 
         assertThat(stage3DiagnosisRepository.finalizeReport(claimed, incident, result)).isPresent();
@@ -310,9 +310,9 @@ class Stage2PostgresIntegrationTests {
                     lease_until = CURRENT_TIMESTAMP - INTERVAL '1 second'
                 WHERE id = ?
                 """, "expired-stage3-test", token, run.id());
-        var claimed = new Stage3DiagnosisRepository.ClaimedAnalysisRun(run.id(), run.incidentId(), 1, "expired-stage3-test", token);
+        var claimed = new DiagnosisRepository.ClaimedAnalysisRun(run.id(), run.incidentId(), 1, "expired-stage3-test", token);
         var incident = stage3DiagnosisRepository.incident(run.incidentId());
-        var result = new Stage3DiagnosisRepository.DiagnosisResult("TEST_RULE", "TEST_GROUND_TRUTH", "must not persist", BigDecimal.ZERO,
+        var result = new DiagnosisRepository.DiagnosisResult("TEST_RULE", "TEST_GROUND_TRUTH", "must not persist", BigDecimal.ZERO,
                 "INSUFFICIENT_EVIDENCE", "[]", List.of(), List.of("expired lease"));
 
         assertThat(stage3DiagnosisRepository.finalizeReport(claimed, incident, result)).isEmpty();

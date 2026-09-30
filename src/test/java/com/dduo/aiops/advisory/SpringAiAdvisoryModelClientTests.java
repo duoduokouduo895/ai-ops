@@ -1,4 +1,4 @@
-package com.dduo.aiops.aid;
+package com.dduo.aiops.advisory;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
@@ -13,7 +13,7 @@ import org.springframework.ai.openai.OpenAiChatModel.ResponseFormat.Type;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.mock.env.MockEnvironment;
 
-class SpringAiStage4ModelClientTests {
+class SpringAiAdvisoryModelClientTests {
 
     @Test
     void appliesDeepSeekCostAndCompatibilityLimitsToEveryRequest() {
@@ -23,7 +23,7 @@ class SpringAiStage4ModelClientTests {
                 .withProperty("spring.ai.openai.chat.model", "deepseek-v4-flash")
                 .withProperty("aidiag.stage4.max-output-tokens", "1200")
                 .withProperty("aidiag.stage4.timeout-seconds", "12");
-        var client = new SpringAiStage4ModelClient(provider, new ObjectMapper(), new Stage4Settings(environment), environment);
+        var client = new SpringAiAdvisoryModelClient(provider, new ObjectMapper(), new AiAdvisorySettings(environment), environment);
 
         var options = client.requestOptions().build();
 

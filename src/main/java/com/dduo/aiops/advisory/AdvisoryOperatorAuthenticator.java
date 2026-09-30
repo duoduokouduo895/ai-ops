@@ -1,4 +1,4 @@
-package com.dduo.aiops.aid;
+package com.dduo.aiops.advisory;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -10,18 +10,18 @@ import org.springframework.stereotype.Component;
 
 /** Fails closed until a dedicated Stage 4 operator password is mounted. */
 @Component
-public class Stage4OperatorAuthenticator {
+public class AdvisoryOperatorAuthenticator {
 
     private final byte[] expectedUsername;
     private final byte[] expectedPassword;
 
     @Autowired
-    public Stage4OperatorAuthenticator(Environment environment) {
+    public AdvisoryOperatorAuthenticator(Environment environment) {
         this(environment.getProperty("aidiag.stage4.operator.username", "aidiag-operator"),
                 environment.getProperty("aidiag.stage4.operator.password", ""));
     }
 
-    Stage4OperatorAuthenticator(String username, String password) {
+    AdvisoryOperatorAuthenticator(String username, String password) {
         this.expectedUsername = username.getBytes(StandardCharsets.UTF_8);
         this.expectedPassword = password.getBytes(StandardCharsets.UTF_8);
     }

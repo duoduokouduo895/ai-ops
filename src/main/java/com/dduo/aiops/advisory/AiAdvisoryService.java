@@ -1,4 +1,4 @@
-package com.dduo.aiops.aid;
+package com.dduo.aiops.advisory;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -22,7 +22,7 @@ import org.springframework.stereotype.Service;
 
 /** Produces an auditable advisory preview without mutating the deterministic diagnosis report. */
 @Service
-public class Stage4AiDiagnosisService {
+public class AiAdvisoryService {
 
     private static final Pattern BEARER_SECRET = Pattern.compile("(?i)\\bBearer\\s+[A-Za-z0-9._~+/-]+=*");
     private static final Pattern ASSIGNED_SECRET = Pattern.compile(
@@ -34,15 +34,15 @@ public class Stage4AiDiagnosisService {
     private static final Pattern CN_MOBILE = Pattern.compile("(?<![A-Za-z0-9])(?:\\+?86[- ]?)?1[3-9]\\d{9}(?!\\d)");
     private static final int MAX_RUNBOOK_ACTIONS = 5;
 
-    private final Stage4Repository repository;
-    private final Stage4ModelClient modelClient;
+    private final AiAdvisoryRepository repository;
+    private final AdvisoryModelClient modelClient;
     private final AiDiagnosisAdviceValidator validator;
-    private final Stage4Settings settings;
+    private final AiAdvisorySettings settings;
     private final ObjectMapper objectMapper;
     private final ExecutorService modelExecutor = Executors.newVirtualThreadPerTaskExecutor();
 
-    public Stage4AiDiagnosisService(Stage4Repository repository, Stage4ModelClient modelClient,
-            AiDiagnosisAdviceValidator validator, Stage4Settings settings, ObjectMapper objectMapper) {
+    public AiAdvisoryService(AiAdvisoryRepository repository, AdvisoryModelClient modelClient,
+            AiDiagnosisAdviceValidator validator, AiAdvisorySettings settings, ObjectMapper objectMapper) {
         this.repository = repository;
         this.modelClient = modelClient;
         this.validator = validator;
@@ -76,7 +76,7 @@ public class Stage4AiDiagnosisService {
             }
             repository.completeAttempt(attemptId, "COMPLETED", json(MapBuilder.response(result.advice(), null)), null, null);
             return new PreviewResult(attemptId, "COMPLETED", result.advice(), null, null, false);
-        } catch (Stage4ModelUnavailableException exception) {
+        } catch (AdvisoryModelUnavailableException exception) {
             return fallback(attemptId, "MODEL_UNAVAILABLE", "Model provider is unavailable");
         } catch (TimeoutException exception) {
             return fallback(attemptId, "MODEL_TIMEOUT", "Model response exceeded " + settings.timeoutSeconds() + " seconds");
@@ -84,7 +84,7 @@ public class Stage4AiDiagnosisService {
             Thread.currentThread().interrupt();
             return fallback(attemptId, "MODEL_INTERRUPTED", "Model request was interrupted");
         } catch (ExecutionException exception) {
-            if (exception.getCause() instanceof Stage4ModelUnavailableException unavailable) {
+            if (exception.getCause() instanceof AdvisoryModelUnavailableException unavailable) {
                 return fallback(attemptId, "MODEL_UNAVAILABLE", "Model provider is unavailable");
             }
             return fallback(attemptId, "MODEL_FAILURE", "Model request failed");
@@ -109,7 +109,7 @@ public class Stage4AiDiagnosisService {
         return new PreviewResult(attemptId, "FALLBACK", null, failureCode, reason, false);
     }
 
-    private AiDiagnosisPrompt prompt(UUID incidentId, Stage4Repository.ReportSnapshot snapshot) {
+    private AiDiagnosisPrompt prompt(UUID incidentId, AiAdvisoryRepository.ReportSnapshot snapshot) {
         try {
             JsonNode report = objectMapper.readTree(snapshot.reportJson());
             var evidence = repository.evidence(snapshot.diagnosisRunId(), settings.maxEvidence()).stream()

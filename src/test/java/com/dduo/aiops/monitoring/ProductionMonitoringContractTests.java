@@ -21,10 +21,12 @@ class ProductionMonitoringContractTests {
 
         assertThat(prometheus)
                 .contains("job_name: ai-chat-candidate", "targets: [ai-chat-candidate:9091]")
-                .contains("elasticsearch-v9-candidate:9200", "nacos-v3-candidate:8848")
+                .contains("elasticsearch-v9-candidate:9200")
                 .contains("job_name: ai-chat-production", "/etc/prometheus/targets/ai-chat-production.json")
-                .contains("regex: metrics", "regex: probe|");
+                .contains("regex: metrics", "regex: probe|")
+                .contains("AI_CHAT_PROMETHEUS_USERNAME", "AI_CHAT_PROMETHEUS_PASSWORD");
         assertThat(prometheus)
+                .doesNotContain("nacos-v3-candidate:8848")
                 .doesNotContain("targets: [elasticsearch:9200]", "targets: [nacos:8848]")
                 .doesNotContain("targets: [ai-chat-production:9091]");
         assertThat(compose).contains("AIDIAG_PROMETHEUS_TARGETS_DIR", ":/etc/prometheus/targets:ro");

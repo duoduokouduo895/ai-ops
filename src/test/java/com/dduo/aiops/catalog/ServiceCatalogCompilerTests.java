@@ -26,6 +26,13 @@ class ServiceCatalogCompilerTests {
             assertThat(result.version()).isEqualTo(1);
             assertThat(result.services()).extracting(ServiceCatalog.MonitoredService::id)
                     .containsExactly("ai-chat", "aidiag");
+            var aiChat = result.services().stream().filter(s -> "ai-chat".equals(s.id())).findFirst().orElseThrow();
+            assertThat(aiChat.healthUrl()).isEqualTo("http://ai-chat-production:9091/actuator/health");
+            assertThat(aiChat.metricsUrl()).isEqualTo("http://ai-chat-production:9091/actuator/prometheus");
+            assertThat(aiChat.dependencies()).anySatisfy(dep -> {
+                assertThat(dep.id()).isEqualTo("elasticsearch");
+                assertThat(dep.target()).isEqualTo("elasticsearch-v9:9200");
+            });
             assertThat(result.sourceDigest()).hasSize(64);
         }
     }

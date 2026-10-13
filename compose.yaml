@@ -318,6 +318,11 @@ services:
   prometheus:
     image: ${PROMETHEUS_IMAGE:?Load versions.env before running Compose}
     restart: unless-stopped
+    # Optional Ai-chat /actuator/prometheus Basic Auth (empty = network-trust scrape).
+    # Flip together with Ai-chat app.security.actuator.prometheus-auth-enabled=true.
+    environment:
+      AI_CHAT_PROMETHEUS_USERNAME: ${AI_CHAT_PROMETHEUS_USERNAME:-}
+      AI_CHAT_PROMETHEUS_PASSWORD: ${AI_CHAT_PROMETHEUS_PASSWORD:-}
     command:
       - --config.file=/etc/prometheus/prometheus.yml
       - --storage.tsdb.path=/prometheus

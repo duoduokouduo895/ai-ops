@@ -51,7 +51,6 @@ export const demoOverview: Overview = {
     ['redis', 'Redis', 'data', '会话与缓存'],
     ['rabbitmq', 'RabbitMQ', 'data', '文档处理消息'],
     ['elasticsearch', 'Elasticsearch', 'data', '知识检索索引'],
-    ['nacos', 'Nacos', 'data', '服务注册与配置'],
     ['prometheus', 'Prometheus', 'telemetry', '指标与告警规则'],
     ['loki', 'Loki', 'telemetry', '日志证据'],
     ['tempo', 'Tempo', 'telemetry', '链路追踪证据'],

@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
+# Writes production file_sd targets for ai-chat metrics (9091) and dependency probes.
+# Scrape credentials (if any) live on the Prometheus job via AI_CHAT_PROMETHEUS_USERNAME /
+# AI_CHAT_PROMETHEUS_PASSWORD — enable them in the same change as Ai-chat prometheus-auth.
+# Nacos is intentionally absent from this probe set; see infra/nacos-candidate/ for rollback.
+
 [[ "${AIDIAG_HOME_MONITORING_CONFIRMED:-}" == "ACTIVATE_HOME_AI_CHAT_MONITORING" ]] \
   || { echo "Set AIDIAG_HOME_MONITORING_CONFIRMED=ACTIVATE_HOME_AI_CHAT_MONITORING" >&2; exit 64; }
 

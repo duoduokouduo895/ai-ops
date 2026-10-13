@@ -26,7 +26,7 @@ public class ServiceCatalogCompiler {
     private static final Set<String> PROFILES = Set.of("ai-chat-v1", "aidiag-v1");
     private static final Set<String> DEFAULT_ALLOWED_HOSTS = Set.of("ai-chat-production", "aidiag-backend", "postgres",
             "prometheus", "loki", "tempo", "alertmanager", "grafana", "mysql", "redis", "rabbitmq",
-            "elasticsearch-v9-candidate", "api.dduo.me");
+            "elasticsearch-v9", "elasticsearch-v9-candidate", "api.dduo.me");
 
     private final ObjectMapper yamlMapper = new ObjectMapper(new YAMLFactory())
             .enable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);

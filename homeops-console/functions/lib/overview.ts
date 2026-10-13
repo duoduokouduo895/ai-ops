@@ -141,7 +141,8 @@ function buildServices(samples: VectorSample[]): ServiceSummary[] {
     { id: 'redis', name: 'Redis', group: 'data', detail: '会话与缓存', match: (m) => m.component === 'redis' },
     { id: 'rabbitmq', name: 'RabbitMQ', group: 'data', detail: '文档处理消息', match: (m) => m.component === 'rabbitmq' },
     { id: 'elasticsearch', name: 'Elasticsearch', group: 'data', detail: '知识检索索引', match: (m) => m.component === 'elasticsearch' },
-    { id: 'nacos', name: 'Nacos', group: 'data', detail: '服务注册与配置', match: (m) => m.component === 'nacos' },
+    // Nacos tile removed: Ai-chat no longer depends on Nacos. Rollback stack:
+    // infra/nacos-candidate/ (do not re-add this tile unless that stack is back in production probes).
     { id: 'prometheus', name: 'Prometheus', group: 'telemetry', detail: '指标与告警规则', match: (m) => m.job === 'prometheus' },
     { id: 'loki', name: 'Loki', group: 'telemetry', detail: '日志证据', match: (m) => m.job === 'loki' },
     { id: 'tempo', name: 'Tempo', group: 'telemetry', detail: '链路追踪证据', match: (m) => m.job === 'tempo' },

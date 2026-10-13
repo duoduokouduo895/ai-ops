@@ -38,8 +38,15 @@ scrape_configs:
         labels:
           service_name: aidiag
 
+  # Optional scrape auth for Ai-chat management metrics. Empty env vars
+  # (default) keep network-trust scrapes; set AI_CHAT_PROMETHEUS_USERNAME and
+  # AI_CHAT_PROMETHEUS_PASSWORD together with Ai-chat
+  # app.security.actuator.prometheus-auth-enabled=true in the same change.
   - job_name: ai-chat-candidate
     metrics_path: /actuator/prometheus
+    basic_auth:
+      username: ${AI_CHAT_PROMETHEUS_USERNAME}
+      password: ${AI_CHAT_PROMETHEUS_PASSWORD}
     static_configs:
       - targets: [ai-chat-candidate:9091]
         labels:
@@ -51,6 +58,9 @@ scrape_configs:
   # incidents during Phase B.
   - job_name: ai-chat-production
     metrics_path: /actuator/prometheus
+    basic_auth:
+      username: ${AI_CHAT_PROMETHEUS_USERNAME}
+      password: ${AI_CHAT_PROMETHEUS_PASSWORD}
     file_sd_configs:
       - files: [/etc/prometheus/targets/ai-chat-production.json]
         refresh_interval: 5s
@@ -63,6 +73,8 @@ scrape_configs:
 
   # Runs outside the AI-chat JVM, so it remains useful when the application
   # cannot start. The component label is fixed here and never user-controlled.
+  # Nacos TCP probe removed from the default set after Ai-chat stopped using
+  # Nacos; rollback configs live under infra/nacos-candidate/ (git history).
   - job_name: blackbox-ai-chat
     metrics_path: /probe
     static_configs:
@@ -76,8 +88,6 @@ scrape_configs:
         labels: {module: tcp_connect, component: rabbitmq, target_kind: dependency, service_name: ai-chat-candidate}
       - targets: [elasticsearch-v9-candidate:9200]
         labels: {module: tcp_connect, component: elasticsearch, target_kind: dependency, service_name: ai-chat-candidate}
-      - targets: [nacos-v3-candidate:8848]
-        labels: {module: tcp_connect, component: nacos, target_kind: dependency, service_name: ai-chat-candidate}
     file_sd_configs:
       - files: [/etc/prometheus/targets/ai-chat-production.json]
         refresh_interval: 5s

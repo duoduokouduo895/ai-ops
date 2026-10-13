@@ -15,14 +15,14 @@ import java.util.UUID;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /** Issues opaque browser sessions while keeping every raw credential out of PostgreSQL and logs. */
 @Service
-@ConditionalOnProperty(prefix = "aidiag.console", name = "enabled", havingValue = "true")
+@ConditionalOnExpression("${aidiag.console.enabled:false} && '${aidiag.console.auth-mode:session}' == 'session'")
 public class ConsoleSessionService {
 
     private static final SecureRandom RANDOM = new SecureRandom();

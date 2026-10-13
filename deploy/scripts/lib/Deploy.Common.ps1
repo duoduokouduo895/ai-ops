@@ -154,8 +154,8 @@ function Get-FrontendReleaseSettings {
     if ($publicUrl.TrimEnd('/') -ne 'https://ops.dduo.me') {
         throw "这套入口固定发布到 https://ops.dduo.me，实际 publicUrl 为：$publicUrl"
     }
-    if ($apiBaseUrl.TrimEnd('/') -ne 'https://ops-api.dduo.me/api/v1/console') {
-        throw "这套入口固定使用 https://ops-api.dduo.me/api/v1/console，实际 apiBaseUrl 为：$apiBaseUrl"
+    if ($apiBaseUrl.TrimEnd('/') -notin @('/api/v1/console', 'https://ops-api.dduo.me/api/v1/console')) {
+        throw "Access 使用 /api/v1/console；账号密码回滚模式使用 https://ops-api.dduo.me/api/v1/console，实际为：$apiBaseUrl"
     }
 
     $installStrategy = [string](Get-RequiredProperty $frontend 'installStrategy' "$ConfigPath.frontend")
@@ -177,6 +177,7 @@ function Get-FrontendReleaseSettings {
         PagesProjectName = Get-CloudflareProjectName $Config $ConfigPath
         PublicUrl = $publicUrl.TrimEnd('/')
         ApiBaseUrl = $apiBaseUrl.TrimEnd('/')
+        AuthMode = $(if ($apiBaseUrl.TrimEnd('/') -eq '/api/v1/console') { 'access' } else { 'session' })
         LocalPath = $localPath
         OutputPath = $outputPath
         InstallStrategy = $installStrategy
@@ -276,6 +277,13 @@ function Assert-BuildOutput {
             throw "构建产物缺少 Pages 必需文件：$requiredFile"
         }
     }
+    if ($ExpectedApiBaseUrl -eq '/api/v1/console') {
+        foreach ($requiredFile in @('_routes.json', '_worker.js')) {
+            if (-not (Test-Path -LiteralPath (Join-Path $OutputRoot $requiredFile))) {
+                throw "Access 构建缺少同域 API 转发产物：$requiredFile"
+            }
+        }
+    }
 
     $jsFiles = @(Get-ChildItem -LiteralPath $OutputRoot -Recurse -File -Filter '*.js')
     if ($jsFiles.Count -eq 0) {
@@ -313,14 +321,21 @@ function Invoke-FrontendBuild {
     }
 
     $previousApiBase = [Environment]::GetEnvironmentVariable('VITE_AIDIAG_API_BASE_URL', 'Process')
+    $previousAuthMode = [Environment]::GetEnvironmentVariable('VITE_CONSOLE_AUTH_MODE', 'Process')
     try {
         $env:VITE_AIDIAG_API_BASE_URL = $Settings.ApiBaseUrl
+        $env:VITE_CONSOLE_AUTH_MODE = $Settings.AuthMode
         Invoke-CheckedProcess $npm @('run', 'build') $paths.FrontendRoot 'npm'
     } finally {
         if ($null -eq $previousApiBase) {
             Remove-Item Env:VITE_AIDIAG_API_BASE_URL -ErrorAction SilentlyContinue
         } else {
             $env:VITE_AIDIAG_API_BASE_URL = $previousApiBase
+        }
+        if ($null -eq $previousAuthMode) {
+            Remove-Item Env:VITE_CONSOLE_AUTH_MODE -ErrorAction SilentlyContinue
+        } else {
+            $env:VITE_CONSOLE_AUTH_MODE = $previousAuthMode
         }
     }
 

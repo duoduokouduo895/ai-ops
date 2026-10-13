@@ -37,7 +37,7 @@ Do not use pure black, pure white, zero-chroma gray, broad blue washes, or alpha
 
 ### Login
 
-A centered form about 360px wide: AIDiag mark, 登录, username, password, submit, and session/error notices. No marketing column, illustration, or large frame.
+A centered panel about 360px wide: AIDiag mark, 登录, one “使用 Cloudflare 账号登录” link, and session/error notices. Access owns authentication. Username/password fields remain only in the explicit Session rollback build. No marketing column, illustration, or large frame.
 
 ### Operations Inbox
 

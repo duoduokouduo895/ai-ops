@@ -1,7 +1,8 @@
 import axios from 'axios'
+import { accessMode } from '../utils/auth'
 import type { AiAttempt, CatalogView, Evidence, IncidentDetail, IncidentPage, IncidentTrend, Overview, PipelineHealthView, ReportView, SessionView, SignalRange, SignalsView, TimelineEntry } from './types'
 
-const baseURL = import.meta.env.VITE_AIDIAG_API_BASE_URL || '/api/v1/console'
+const baseURL = accessMode ? '/api/v1/console' : (import.meta.env.VITE_AIDIAG_API_BASE_URL || '/api/v1/console')
 let csrfToken = ''
 
 export const api = axios.create({ baseURL, withCredentials: true, timeout: 12_000 })
@@ -15,7 +16,14 @@ api.interceptors.request.use((config) => {
 })
 
 api.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    // An expired edge login can return HTML instead of the expected JSON API response.
+    if (accessMode && !String(response.headers['content-type'] || '').includes('application/json')) {
+      window.dispatchEvent(new CustomEvent('aidiag:session-expired'))
+      return Promise.reject(new Error('CONSOLE_ACCESS_REQUIRED'))
+    }
+    return response
+  },
   (error) => {
     if (error?.response?.status === 401) {
       clearCsrf()

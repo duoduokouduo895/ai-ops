@@ -37,7 +37,7 @@ flowchart LR
         DG["diagnosis<br/>固定查询 + 规则判定"] --> DB
         ADV["advisory<br/>AI 受限建议"] --> DB
         MON["monitoring<br/>AI-chat 黄金信号"]
-        API["console<br/>Session + 只读投影 API"]
+        API["console<br/>Access 身份 + 只读投影 API"]
     end
     CHAT -->|metrics| PROM
     CHAT -->|logs / OTLP| ALLOY
@@ -70,11 +70,15 @@ AI-chat 与 AIDiag 只通过遥测协议和告警协议连接：AIDiag 故障不
 | `monitoring` | 按服务目录输出固定黄金信号（阈值与告警规则由契约测试锁定一致） |
 | `telemetry` | 有界 Prometheus 客户端（超时、响应字节、序列数上限） |
 | `catalog` | Git 版本化服务目录、依赖探针汇总、AIDiag 自监控 |
-| `console` | Session + CSRF + 精确 Origin，浏览器安全投影 API |
+| `console` | Cloudflare Access JWT 校验与浏览器安全投影 API；保留 Session 模式供回滚 |
 
 ## 控制台
 
 `frontend-console/` 是 Vue 3 + TypeScript 的只读控制台，暗色“Incident Casefile”风格（见 [`DESIGN.md`](DESIGN.md)、[`PRODUCT.md`](PRODUCT.md)）：
+
+本地新版默认使用 Cloudflare Access + Cloudflare 账号登录，通过 Pages Function 请求同域 API。
+后端需启用 Access Compose 覆盖并提供实际 Team domain 与应用 AUD。
+接入、真实验收和回滚见 [`docs/Cloudflare-Access-控制台接入.md`](docs/Cloudflare-Access-控制台接入.md)；尚未激活到线上。
 
 - **Inbox**：未恢复事件、待处理诊断任务、处理链路状态，以及最近 14 天事件趋势（按严重程度拆分）。
 - **AI-chat**：外部可用性、请求结果分布、首 Token P95、模型超时、SSE 流、R2DBC 排队、Outbox 积压、检索失败；每张图叠加与 Prometheus 规则一致的阈值线，并显示该规则当前 `FIRING / PENDING / INACTIVE`。窗口只能选 1h / 6h / 24h。

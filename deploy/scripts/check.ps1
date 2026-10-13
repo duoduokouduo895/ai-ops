@@ -69,6 +69,7 @@ function Invoke-HttpProbe {
             AllowOrigin = $allowOrigin
             AllowMethods = $allowMethods
             AllowHeaders = $allowHeaders
+            RedirectUri = $(if ($null -ne $response.Headers.Location) { $response.Headers.Location.ToString() } else { '' })
         }
     } finally {
         $request.Dispose()
@@ -142,6 +143,17 @@ if ([bool](Get-OptionalProperty $checks 'enableFrontendCheck' $true)) {
             $probe = Invoke-HttpProbe ([Uri]$url)
             if ($probe.StatusCode -notin $settings.AcceptableStatusCodes) {
                 throw "状态码 $($probe.StatusCode)，期望 $($settings.AcceptableStatusCodes -join ',')"
+            }
+            if ($settings.AuthMode -eq 'access') {
+                $location = $null
+                $validLocation = [Uri]::TryCreate($probe.RedirectUri, [UriKind]::Absolute, [ref]$location)
+                if ($probe.StatusCode -ne 302 -or -not $validLocation -or $location.Scheme -ne 'https' -or
+                    $location.Host -notmatch '^[a-z0-9-]+\.cloudflareaccess\.com$' -or
+                    -not $location.AbsolutePath.StartsWith('/cdn-cgi/access/login')) {
+                    throw '未登录请求没有进入预期的 Cloudflare Access 登录挑战。'
+                }
+                Write-Host "PASS access-challenge path=$path status=302 (尚未验证已登录功能)"
+                continue
             }
             Write-Host "PASS frontend path=$path status=$($probe.StatusCode) type=$($probe.ContentType) bytes=$($probe.Bytes)"
             if ([string]$path -eq '/') {

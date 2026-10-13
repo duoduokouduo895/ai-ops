@@ -16,7 +16,7 @@ async function mockApi(page: Page) {
       failureCode: null, diagnosisStartedAt: '2026-07-15T00:01:10Z', diagnosisFinishedAt: '2026-07-15T00:04:00Z',
     }
     const summary = { ...incident, hasReport: true, evidenceCount: 2 }
-    const json = path.endsWith('/session') ? { principal: 'aidiag-admin', idleExpiresAt: '2026-07-15T08:00:00Z', absoluteExpiresAt: '2026-07-16T00:00:00Z', csrfToken: 'csrf' }
+    const json = path.endsWith('/session') ? { authMode: 'access', principal: 'owner@example.com', idleExpiresAt: '2026-07-15T08:00:00Z', absoluteExpiresAt: '2026-07-16T00:00:00Z', csrfToken: 'csrf' }
       : path.endsWith('/overview') ? { activeIncidents: 1, pendingRuns: 1, recoveredLast24Hours: 4, failedIncidents: 0, lastEvidenceAt: '2026-07-15T00:03:00Z' }
       : path.endsWith('/pipeline-health') ? { queriedAt: '2026-07-15T00:05:00Z', lastSuccessfulCheckAt: '2026-07-15T00:05:00Z', freshness: 'FRESH', reason: 'FRESH', databaseStatus: 'UP', activeIncidents: 1, pendingRuns: 1, waitingRuns: 0, inProgressRuns: 1, oldestPendingAgeSeconds: 20, lastAlertAt: '2026-07-15T00:05:00Z', lastEvidenceAt: '2026-07-15T00:03:00Z', lastReportAt: '2026-07-15T00:04:00Z', pipelineStatus: 'IN_PROGRESS' }
       : path.endsWith('/services') ? { version: '1', compiledAt: '2026-07-15T00:00:00Z', sourceDigest: 'abc', queriedAt: '2026-07-15T00:05:00Z', services: [{ id: 'ai-chat', displayName: 'AI-chat Production', otelServiceName: 'ai-chat-production', environment: 'production', diagnosisProfile: 'ai-chat-v1', status: 'UP', applicationStatus: 'UP', queriedAt: '2026-07-15T00:05:00Z', sampledAt: '2026-07-15T00:04:50Z', freshness: 'FRESH', reason: 'FRESH', dependencies: [{ id: 'postgresql', kind: 'DATABASE', status: 'UP', observedAt: '2026-07-15T00:05:00Z', sampledAt: '2026-07-15T00:04:50Z', freshness: 'FRESH', reason: 'FRESH' }, { id: 'model-provider', kind: 'EXTERNAL', status: 'UNKNOWN', observedAt: '2026-07-15T00:05:00Z', sampledAt: '2026-07-14T00:03:00Z', freshness: 'STALE', reason: 'STALE' }], grafanaUrl: 'http://127.0.0.1:13000' }] }
@@ -130,6 +130,37 @@ test('returns to login with an explicit message after session expiry', async ({ 
   await expect(page.getByText('会话已过期，请重新登录。')).toBeVisible()
   await expect(page.getByText(/会话 Cookie/)).toHaveCount(0)
   await expect(page.getByText('从告警到证据')).toHaveCount(0)
+  await expect(page.getByRole('link', { name: '使用 Cloudflare 账号登录' })).toBeVisible()
+  await expect(page.getByRole('textbox')).toHaveCount(0)
+})
+
+test('shows Cloudflare login without a password form and preserves a safe return path', async ({ page }, testInfo) => {
+  await page.route('**/api/v1/console/session', (route) => route.fulfill({
+    status: 401, contentType: 'application/json', body: JSON.stringify({ code: 'CONSOLE_ACCESS_REQUIRED' }),
+  }))
+  await page.goto('/login?redirect=%2Fincidents%3Fstatus%3DOPEN')
+  await expect(page.getByRole('link', { name: '使用 Cloudflare 账号登录' })).toHaveAttribute('href', '/incidents?status=OPEN')
+  await expect(page.getByRole('textbox')).toHaveCount(0)
+  await expect(page.locator('input[type=password]')).toHaveCount(0)
+  await expect(page.getByText('暂时无法进入控制台，请重新登录或稍后重试。')).toHaveCount(0)
+  await page.screenshot({ path: testInfo.outputPath('access-login.png'), fullPage: true })
+  await page.goto('/login?redirect=%2F%2Fevil.example')
+  await expect(page.getByRole('link', { name: '使用 Cloudflare 账号登录' })).toHaveAttribute('href', '/')
+})
+
+test('logs out through Cloudflare instead of calling the old password session API', async ({ page }) => {
+  const methods: string[] = []
+  page.on('request', (request) => {
+    if (request.url().includes('/api/v1/console/session')) methods.push(request.method())
+  })
+  await page.route('**/cdn-cgi/access/logout', (route) => route.fulfill({ contentType: 'text/html', body: 'Signed out' }))
+  await page.goto('/')
+  await expect(page.getByRole('heading', { name: 'Inbox', exact: true })).toBeVisible()
+  const menu = page.getByRole('button', { name: 'Menu', exact: true })
+  if (await menu.isVisible()) await menu.click()
+  await page.getByRole('button', { name: 'Sign out', exact: true }).click()
+  await expect(page).toHaveURL(/\/cdn-cgi\/access\/logout$/)
+  expect(methods).not.toContain('DELETE')
 })
 
 test('shows a compact inbox summary without treating pending runs as watching', async ({ page }) => {

@@ -25,7 +25,10 @@ const nav = [
 async function signOut() {
   if (signingOut.value) return
   signingOut.value = true
-  try { await session.logout(); await router.push({ name: 'login' }) } finally { signingOut.value = false }
+  try {
+    await session.logout()
+    if (!session.accessMode) await router.push({ name: 'login' })
+  } finally { signingOut.value = false }
 }
 function openGuide(event: Event) {
   hint.close()
@@ -56,7 +59,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
       </nav>
       <div class="rail-footer">
         <button class="guide" type="button" @click="openGuide($event)">使用说明</button>
-        <button class="signout" type="button" :disabled="signingOut" :aria-busy="signingOut" @click="signOut">{{ signingOut ? 'Signing out…' : 'Sign out' }}</button>
+        <button class="signout" type="button" :disabled="signingOut" :aria-busy="signingOut" :title="session.accessMode ? '同时退出当前团队的其他 Access 应用' : undefined" @click="signOut">{{ signingOut ? 'Signing out…' : 'Sign out' }}</button>
       </div>
     </aside>
 
@@ -70,7 +73,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
           <span>{{ item.label }}</span>
         </RouterLink>
         <button type="button" @click="openGuide($event)">使用说明</button>
-        <button type="button" :disabled="signingOut" :aria-busy="signingOut" @click="signOut">{{ signingOut ? 'Signing out…' : 'Sign out' }}</button>
+        <button type="button" :disabled="signingOut" :aria-busy="signingOut" :title="session.accessMode ? '同时退出当前团队的其他 Access 应用' : undefined" @click="signOut">{{ signingOut ? 'Signing out…' : 'Sign out' }}</button>
       </nav>
     </Transition>
     <main class="workspace"><div class="page" :data-width="width"><slot /></div></main>

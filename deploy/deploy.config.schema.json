@@ -51,7 +51,7 @@
         "buildOutputDir": { "type": "string", "minLength": 1 },
         "publicUrl": { "const": "https://ops.dduo.me" },
         "previewUrl": { "type": "string" },
-        "apiBaseUrl": { "const": "https://ops-api.dduo.me/api/v1/console" },
+        "apiBaseUrl": { "enum": ["/api/v1/console", "https://ops-api.dduo.me/api/v1/console"] },
         "healthCheckPaths": {
           "type": "array",
           "items": { "type": "string", "pattern": "^/" },
@@ -111,7 +111,7 @@
       "properties": {
         "enableFrontendCheck": { "const": true },
         "enableBackendCheck": { "const": false },
-        "enableCorsCheck": { "const": true },
+        "enableCorsCheck": { "type": "boolean" },
         "enableSseCheck": { "const": false },
         "corsOrigin": { "const": "https://ops.dduo.me" },
         "corsLoginUrl": { "const": "https://ops-api.dduo.me/api/v1/console/session" },

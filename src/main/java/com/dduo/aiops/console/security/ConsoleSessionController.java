@@ -8,7 +8,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseCookie;
 import org.springframework.http.ResponseEntity;
@@ -21,7 +21,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequestMapping("/api/v1/console/session")
-@ConditionalOnProperty(prefix = "aidiag.console", name = "enabled", havingValue = "true")
+@ConditionalOnExpression("${aidiag.console.enabled:false} && '${aidiag.console.auth-mode:session}' == 'session'")
 public class ConsoleSessionController {
 
     private final ConsoleSessionService sessionService;

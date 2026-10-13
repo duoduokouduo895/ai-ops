@@ -1,11 +1,11 @@
 package com.dduo.aiops.console.security;
 
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 @Component
-@ConditionalOnProperty(prefix = "aidiag.console", name = "enabled", havingValue = "true")
+@ConditionalOnExpression("${aidiag.console.enabled:false} && '${aidiag.console.auth-mode:session}' == 'session'")
 public class ConsoleSessionCleanupWorker {
 
     private final ConsoleSessionRepository repository;

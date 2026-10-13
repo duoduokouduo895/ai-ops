@@ -17,13 +17,13 @@
     "publicUrl": "https://ops.dduo.me",
     "previewUrl": "",
     // Dedicated build-time API target. This is public configuration, not a secret.
-    "apiBaseUrl": "https://ops-api.dduo.me/api/v1/console",
+    "apiBaseUrl": "/api/v1/console",
     "healthCheckPaths": [
       "/",
       "/login"
     ],
     "acceptableStatusCodes": [
-      200
+      302
     ]
   },
   "backend": {
@@ -32,8 +32,8 @@
   },
   "platform": {
     "cloudflare": {
-      // Fill this with the existing Pages project name; do not create a new project here.
-      "pagesProjectName": "REPLACE_WITH_EXISTING_CLOUDFLARE_PAGES_PROJECT_NAME",
+      // Existing Pages project serving ops.dduo.me; reuse it for this release.
+      "pagesProjectName": "aidiag-console",
       "customDomain": "ops.dduo.me",
       "previewUrl": ""
     }
@@ -41,7 +41,7 @@
   "checks": {
     "enableFrontendCheck": true,
     "enableBackendCheck": false,
-    "enableCorsCheck": true,
+    "enableCorsCheck": false,
     "enableSseCheck": false,
     "corsOrigin": "https://ops.dduo.me",
     "corsLoginUrl": "https://ops-api.dduo.me/api/v1/console/session",

@@ -3,6 +3,7 @@ param(
     [ValidateSet('frontend', 'check', 'backend', 'all')]
     [string]$Target = 'frontend',
     [switch]$ConfirmDeploy,
+    [switch]$PreflightOnly,
     [string]$ConfigPath
 )
 
@@ -23,6 +24,18 @@ if ($Target -in @('backend', 'all')) {
 
 $config = Read-DeployConfig $resolvedConfigPath
 $settings = Get-FrontendReleaseSettings $config $resolvedConfigPath
+
+if ($PreflightOnly) {
+    if ($ConfirmDeploy) {
+        throw 'PreflightOnly 与 ConfirmDeploy 不能同时使用。'
+    }
+    $paths = Get-FrontendPaths $settings
+    Assert-BuildOutput $paths.OutputRoot $settings.ApiBaseUrl
+    $wrangler = Assert-WranglerAuthenticated $paths.FrontendRoot
+    Invoke-CheckedProcess $wrangler @('pages', 'deployment', 'list', '--project-name', $settings.PagesProjectName) $paths.FrontendRoot 'wrangler'
+    Write-Host "PREFLIGHT_READY target=frontend project=$($settings.PagesProjectName) (未执行 Cloudflare 写入)"
+    return
+}
 
 if (-not $ConfirmDeploy) {
     Write-Host 'MODE dry-run'

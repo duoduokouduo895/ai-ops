@@ -1,5 +1,12 @@
 # 家用服务器部署覆盖
 
+新版控制台可使用 `compose.console-access.yaml` 替代根目录 `compose.console.yaml`，
+接入 Cloudflare Access + Cloudflare 账号登录，不加载控制台密码 Secret。
+该改造已于 2026-10-01 在家庭 AIDiag 后端激活，健康检查通过；真实账号登录仍待用户验收。
+版本、验证与回滚点见 [发布记录](../../docs/deployment-verification/2026-10-01-cloudflare-access-release.md)。
+所需参数、操作顺序、验收与回滚见
+[`Cloudflare Access 接入说明`](../../docs/Cloudflare-Access-控制台接入.md)。
+
 这些 Compose 覆盖文件用于 9GB 内存的单机部署，目标是保留 AI-chat 与 AIDiag 的必要闭环，而不是复刻云端的全部历史环境。
 
 保留：MySQL、Redis、RabbitMQ、Elasticsearch 9 + IK、AI-chat、AIDiag 核心观测链。

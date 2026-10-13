@@ -89,6 +89,10 @@ info:
 aidiag:
   console:
     enabled: ${AIDIAG_CONSOLE_ENABLED:false}
+    auth-mode: ${AIDIAG_CONSOLE_AUTH_MODE:session}
+    access:
+      team-domain: ${AIDIAG_CONSOLE_ACCESS_TEAM_DOMAIN:}
+      audience: ${AIDIAG_CONSOLE_ACCESS_AUDIENCE:}
     username: ${AIDIAG_CONSOLE_USERNAME:aidiag-admin}
     password-hash: ${AIDIAG_CONSOLE_PASSWORD_HASH:${aidiag.console.password-hash-secret:}}
     audit-pepper: ${AIDIAG_CONSOLE_AUDIT_PEPPER:${aidiag.console.audit-pepper-secret:}}

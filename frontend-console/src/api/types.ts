@@ -3,6 +3,7 @@ export type IncidentSeverity = 'INFO' | 'WARNING' | 'CRITICAL'
 export type EvidenceType = 'METRIC' | 'LOG' | 'TRACE' | 'TOPOLOGY' | 'RUNBOOK' | 'CHANGE_HISTORY'
 
 export interface SessionView {
+  authMode?: 'access' | 'session'
   principal: string
   idleExpiresAt: string
   absoluteExpiresAt: string

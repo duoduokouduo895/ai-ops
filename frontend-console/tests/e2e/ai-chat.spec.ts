@@ -54,7 +54,7 @@ async function mockApi(page: Page) {
   await page.route('**/api/v1/console/**', async (route) => {
     const url = new URL(route.request().url())
     const path = url.pathname
-    const json = path.endsWith('/session') ? { principal: 'aidiag-admin', idleExpiresAt: '2026-10-01T08:00:00Z', absoluteExpiresAt: '2026-10-02T00:00:00Z', csrfToken: 'csrf' }
+    const json = path.endsWith('/session') ? { authMode: 'access', principal: 'owner@example.com', idleExpiresAt: '2026-10-01T08:00:00Z', absoluteExpiresAt: '2026-10-02T00:00:00Z', csrfToken: 'csrf' }
       : path.endsWith('/signals') ? { ...signals, range: url.searchParams.get('range') ?? '1h' }
       : path.endsWith('/overview/trend') ? trend
       : path.endsWith('/overview') ? { activeIncidents: 1, pendingRuns: 0, recoveredLast24Hours: 2, failedIncidents: 0, lastEvidenceAt: '2026-09-30T11:49:00Z' }

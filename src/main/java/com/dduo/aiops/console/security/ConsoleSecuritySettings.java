@@ -13,6 +13,9 @@ public final class ConsoleSecuritySettings {
     private static final Pattern PRINCIPAL = Pattern.compile("[A-Za-z0-9._-]{1,128}");
 
     private final boolean enabled;
+    private final String authMode;
+    private final String accessTeamDomain;
+    private final String accessAudience;
     private final String username;
     private final String passwordHash;
     private final String auditPepper;
@@ -27,6 +30,9 @@ public final class ConsoleSecuritySettings {
 
     public ConsoleSecuritySettings(Environment environment) {
         enabled = environment.getProperty("aidiag.console.enabled", Boolean.class, false);
+        authMode = environment.getProperty("aidiag.console.auth-mode", "session").trim();
+        accessTeamDomain = environment.getProperty("aidiag.console.access.team-domain", "").trim();
+        accessAudience = environment.getProperty("aidiag.console.access.audience", "").trim();
         username = environment.getProperty("aidiag.console.username", "aidiag-admin").trim();
         passwordHash = environment.getProperty("aidiag.console.password-hash", "").trim();
         auditPepper = environment.getProperty("aidiag.console.audit-pepper", "").trim();
@@ -42,6 +48,9 @@ public final class ConsoleSecuritySettings {
     }
 
     private void validate() {
+        if (!authMode.equals("session") && !authMode.equals("access")) {
+            throw new IllegalArgumentException("aidiag.console.auth-mode must be session or access");
+        }
         if (!PRINCIPAL.matcher(username).matches()) {
             throw new IllegalArgumentException("aidiag.console.username must be a controlled identifier");
         }
@@ -55,7 +64,16 @@ public final class ConsoleSecuritySettings {
                 || maxFailures < 2 || maxFailures > 20 || retentionDays < 1 || retentionDays > 365) {
             throw new IllegalArgumentException("aidiag.console security limits are outside the reviewed bounds");
         }
-        if (enabled) {
+        if (enabled && accessMode()) {
+            if (!accessTeamDomain.matches("[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.cloudflareaccess\\.com")
+                    || accessTeamDomain.contains("replace-before-deploy")) {
+                throw new IllegalStateException("Access requires a real team domain without scheme or path");
+            }
+            if (!accessAudience.matches("[A-Fa-f0-9]{64}")) {
+                throw new IllegalStateException("Access requires the console application's 64-character AUD tag");
+            }
+        }
+        if (enabled && !accessMode()) {
             if (!passwordHash.matches("^\\$2[aby]\\$[0-9]{2}\\$.{53}$")) {
                 throw new IllegalStateException("Console is enabled without a valid BCrypt password hash secret");
             }
@@ -66,6 +84,9 @@ public final class ConsoleSecuritySettings {
     }
 
     public boolean enabled() { return enabled; }
+    public boolean accessMode() { return authMode.equals("access"); }
+    public String accessIssuer() { return "https://" + accessTeamDomain; }
+    public String accessAudience() { return accessAudience; }
     public String username() { return username; }
     public String passwordHash() { return passwordHash; }
     public String auditPepper() { return auditPepper; }
